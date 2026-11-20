@@ -1,6 +1,6 @@
 import { Game, ENEMIES, UPGRADES, formatTime } from './engine.js';
 import { TITLE, PORTRAIT, ENEMY_PORTRAITS } from './art.js';
-import { Field } from './field.js';
+import { Field } from './field.js?v=1.0.1';
 
 const $ = id => document.getElementById(id);
 const root = document.documentElement;
