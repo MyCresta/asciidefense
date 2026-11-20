@@ -211,3 +211,22 @@ dialog::backdrop { background:#000c; }
   .feed { padding:8px 9px 3px; } .feed-head { margin:0; } #messages { min-height:1.58em; font-size:.66rem; }
   #messages li:nth-child(n+2) { display:none; } footer { min-height:0; font-size:.6rem; }
 }
+
+@media (min-width:701px) {
+  .portrait-area { container-type:size; }
+  #portrait { font-size:min(clamp(4.4px,.49vw,8.1px),4.7cqh,5.5cqw); }
+}
+@media (pointer:fine) { .cursor-ready,.cursor-ready * { cursor:none; } }
+@media (max-width:700px) and (max-height:520px) {
+  .console { min-height:300px; grid-template-rows:34px 42px minmax(0,1fr) 17px; gap:3px; padding:3px 6px; }
+  .masthead { min-height:0; display:flex; } #wordmark { font-size:4.8px; }
+  .controls { display:flex; } .controls button { font-size:.62rem; }
+  .workspace { grid-template-columns:minmax(0,1fr) minmax(158px,32%); grid-template-rows:minmax(0,1fr); gap:5px; }
+  .metric { gap:1px; } .metric-label { font-size:.53rem; } .metric strong { font-size:.83rem; }
+  .side { grid-template-rows:24px minmax(0,1fr); } .mobile-tabs { gap:3px; } .mobile-tabs button { font-size:.62rem; min-height:21px; }
+  .upgrade-icon { display:none; } .upgrade-copy { flex-direction:column; gap:2px; align-items:flex-start; }
+  .upgrade-name,.cost { font-size:.64rem; } .upgrade-level { font-size:.57rem; }
+  .side.show-inspector .inspector { display:flex; } .entity-card { flex:1; align-self:stretch; }
+  .entity-stats { margin:3px 7px 8px; gap:2px; } #portrait { font-size:3.15px; }
+  .feed-head { display:none; } footer { min-height:14px; } footer button { padding:0; }
+}

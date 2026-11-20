@@ -1,4 +1,4 @@
-import { TOWER, ENEMY_ART } from './art.js';
+import { TOWER, ENEMY_ART } from './art.js?v=1.0.2';
 
 const FONT = '"Lucida Console", "Liberation Mono", "Courier New", monospace';
 const TAU = Math.PI * 2;
@@ -61,7 +61,7 @@ function makeSprite(rows, lineHeight, ratio, colors, tower = false) {
       let color = colors.ink;
       if (tower) {
         if (char === '*' || char === '@' || (row === 1 && char === '#')) color = colors.accent;
-        else if (row === 13 && char === '|' && [27, 28, 32, 33].includes(col)) color = colors.accent;
+        else if (row === 13 && char === '|' && [28, 29, 33, 34].includes(col)) color = colors.accent;
         else if (char === '.' || char === ':' || char === ';' || char === "'") color = colors.muted;
       } else if (/[oO@*]/.test(char)) color = colors.accent;
       if (color !== previous || col === end) {

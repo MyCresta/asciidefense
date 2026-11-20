@@ -1,6 +1,6 @@
 import { Game, ENEMIES, UPGRADES, formatTime } from './engine.js';
-import { TITLE, PORTRAIT, ENEMY_PORTRAITS } from './art.js';
-import { Field } from './field.js?v=1.0.1';
+import { TITLE, PORTRAIT, ENEMY_PORTRAITS } from './art.js?v=1.0.2';
+import { Field } from './field.js?v=1.0.2';
 
 const $ = id => document.getElementById(id);
 const root = document.documentElement;
@@ -350,7 +350,13 @@ fullscreen.addEventListener('click', async () => {
   try {
     if (document.fullscreenElement) await document.exitFullscreen();
     else await root.requestFullscreen();
-  } catch { setText($('announcer'), 'Fullscreen is unavailable in this window.'); }
+  } catch {
+    setText($('announcer'), 'Use your browser controls to enter fullscreen.');
+    setText(fullscreen, '[ Use browser fullscreen ]');
+    window.setTimeout(() => {
+      if (!document.fullscreenElement) setText(fullscreen, '[ Fullscreen ]');
+    }, 3000);
+  }
 });
 document.addEventListener('fullscreenchange', () => {
   const active = Boolean(document.fullscreenElement);
@@ -358,6 +364,7 @@ document.addEventListener('fullscreenchange', () => {
   fullscreen.setAttribute('aria-pressed', String(active));
 });
 const pointerMedia = matchMedia('(pointer:fine)');
+root.classList.add('cursor-ready');
 document.addEventListener('pointermove', event => {
   if (!pointerMedia.matches || event.pointerType === 'touch') return;
   root.classList.add('custom-pointer');
