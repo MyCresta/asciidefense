@@ -161,6 +161,9 @@ for (const [i, key] of upgradeKeys.entries()) {
   icon.setAttribute('aria-hidden','true');
   const copy = element('span','upgrade-copy');
   const name = element('span','upgrade-name',UPGRADES[key].name);
+  const keyNumber = element('span','key-number',' [' + (i + 1) + ']');
+  keyNumber.setAttribute('aria-hidden','true');
+  name.append(keyNumber);
   const level = element('span','upgrade-level');
   copy.append(name, level);
   const price = element('span','cost');
@@ -340,6 +343,19 @@ document.addEventListener('keydown', event => {
   }
   if (/^[1-3]$/.test(event.key)) { event.preventDefault(); purchase(upgradeKeys[Number(event.key)-1]); }
   if (event.key === 'Escape' && game.status !== 'over') { event.preventDefault(); togglePlay(); }
+});
+const fullscreen = $('fullscreen');
+fullscreen.hidden = !document.fullscreenEnabled;
+fullscreen.addEventListener('click', async () => {
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await root.requestFullscreen();
+  } catch { setText($('announcer'), 'Fullscreen is unavailable in this window.'); }
+});
+document.addEventListener('fullscreenchange', () => {
+  const active = Boolean(document.fullscreenElement);
+  setText(fullscreen, active ? '[ Exit fullscreen ]' : '[ Fullscreen ]');
+  fullscreen.setAttribute('aria-pressed', String(active));
 });
 const pointerMedia = matchMedia('(pointer:fine)');
 document.addEventListener('pointermove', event => {

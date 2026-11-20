@@ -97,8 +97,7 @@ export class Field {
     this.observer = new ResizeObserver(() => { this.dirty = true; });
     this.observer.observe(canvas);
     this.themeObserver = new MutationObserver(() => { this.colorsDirty = true; });
-    this.themeObserver.observe(document.documentElement, { attributes: true });
-    this.themeObserver.observe(document.body, { attributes: true });
+    this.themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     canvas.addEventListener('pointermove', event => {
       const point = this.localPoint(event);
       this.pointer = this.unproject(point);
@@ -193,7 +192,7 @@ export class Field {
       rx: Math.min(w * .258, h * .50), ry: Math.min(w * .142, h * .205)
     };
     const towerCols = Math.max(...TOWER.map(line => line.length));
-    const towerLine = Math.min(w * (w < 520 ? .41 : .345) / (towerCols * .624), h * .505 / TOWER.length, 9);
+    const towerLine = Math.min(w * (w < 520 ? .41 : .345) / (towerCols * .624), h * .585 / TOWER.length, 9);
     this.tower = makeSprite(TOWER, towerLine, ratio, this.colors, true);
     this.enemySprites = {};
     const enemyLine = clamp(Math.min(w / 79, h / 45), 6.6, 11.7);
