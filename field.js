@@ -1,10 +1,12 @@
-import { TOWER, TOWER_SMALL, ENEMY_ART } from './art.js?v=2.0.0';
+import { TOWER, TOWER_SMALL, ENEMY_ART } from './art.js?v=3.0.0';
+import { maxWeaponRange } from './weapons.js?v=3.0.0';
 
 const FONT = '"Lucida Console", "Liberation Mono", "Courier New", monospace';
 const TAU = Math.PI * 2;
 const HALF_WORLD_WIDTH = 140;
 const HALF_WORLD_HEIGHT = 84;
 const TOWER_ANCHOR = .72;
+const MOUNT_MARKS = { bolt: '+', scatter: ':', lance: '=', coil: '~' };
 const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 
 function randomSequence(seed) {
@@ -262,7 +264,7 @@ export class Field {
   }
 
   rangeLayer() {
-    const { range } = this.game;
+    const range = maxWeaponRange(this.game);
     if (this.cachedCircle && this.cachedCircle.range === range) return this.cachedCircle;
     const image = surface(this.w, this.h, this.ratio);
     const { ctx } = image;
@@ -364,11 +366,27 @@ export class Field {
     ctx.textAlign = 'left';
   }
 
+  mountPoint(slot) {
+    const { ox, oy } = this.geometry;
+    const { width, height } = this.tower;
+    if (slot <= 0) return { x: ox, y: oy - height * .31 };
+    return { x: ox + width * (slot === 1 ? -.25 : .30), y: oy - height * .13 };
+  }
+
   paintTower() {
     const { ctx, tower, geometry: g } = this;
     const x = Math.round(g.ox - tower.width / 2);
     const y = Math.round(g.oy - tower.height * TOWER_ANCHOR);
     this.paintImage(tower, x, y);
+    const mounts = this.game.armory?.mounts || [];
+    ctx.font = `bold ${Math.max(5, tower.lineHeight * 1.13)}px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = this.colors.accent;
+    for (let slot = 1; slot < mounts.length; slot++) {
+      const port = this.mountPoint(slot);
+      ctx.fillText(MOUNT_MARKS[mounts[slot].key], port.x, port.y);
+    }
+    ctx.textAlign = 'left';
     this.hitList.push({ x, y, sprite: tower, id: 'tower' });
     if (this.game.selected === 'tower' || this.hover === 'tower' || this.keyTarget === 'tower') {
       ctx.font = `bold 10px ${FONT}`;
@@ -379,16 +397,72 @@ export class Field {
     }
   }
 
+  paintMountShot(shot, start, end) {
+    const { ctx, colors } = this;
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const length = Math.max(1, Math.hypot(dx, dy));
+    const nx = -dy / length, ny = dx / length;
+    const life = clamp(shot.life / shot.maxLife, 0, 1);
+    ctx.fillStyle = shot.crit ? colors.ink : colors.accent;
+    ctx.font = `bold 9px ${FONT}`;
+    if (shot.kind === 'scatter') {
+      // A short packet of pellets advances across three diverging trajectories.
+      const spread = Math.min(12, length * .19);
+      for (let lane = -1; lane <= 1; lane++) {
+        for (let pellet = 0; pellet < 4; pellet++) {
+          const t = .12 + .57 * (1 - life) + pellet * .095;
+          const lateral = lane * t * spread;
+          ctx.globalAlpha = life * (.5 + pellet * .16);
+          ctx.fillText(pellet === 3 ? '*' : '.', start.x + dx * t + nx * lateral, start.y + dy * t + ny * lateral);
+        }
+      }
+    } else if (shot.kind === 'lance') {
+      // The rail tracer continues a little way through its target.
+      const slope = Math.abs(dy / (dx || .01));
+      const stroke = slope < .38 ? '=' : slope > 2.5 ? '|' : dx * dy < 0 ? '/' : '\\';
+      const count = clamp(Math.ceil(length / 5), 2, 100);
+      const reach = 1 + Math.min(18 / length, .23);
+      for (let i = 1; i <= count; i++) {
+        const t = reach * i / count;
+        ctx.globalAlpha = life * (.3 + .65 * i / count);
+        ctx.fillText(stroke, start.x + dx * t, start.y + dy * t);
+      }
+      ctx.globalAlpha = life;
+      ctx.fillStyle = colors.ink;
+      ctx.fillText('#', end.x, end.y);
+    } else {
+      // A kinked main discharge reads separately from the shorter chain hops.
+      const count = clamp(Math.ceil(length / 5), 3, 76);
+      const amplitude = Math.min(8, length * .13);
+      const phase = (1 - life) * 1.6;
+      for (let i = 1; i < count; i++) {
+        const t = i / count;
+        const kink = Math.sin(i * .85 + phase) * Math.sin(Math.PI * t) * amplitude;
+        ctx.globalAlpha = life * (.55 + .4 * t);
+        ctx.fillText(i % 4 === 0 ? '+' : '~', start.x + dx * t + nx * kink, start.y + dy * t + ny * kink);
+      }
+      ctx.globalAlpha = life;
+      ctx.fillText('*', end.x, end.y);
+    }
+  }
+
   paintShots() {
-    const { ctx, colors, game, geometry: g } = this;
-    const muzzle = { x: g.ox, y: g.oy - this.tower.height * .31 };
+    const { ctx, colors, game } = this;
     ctx.textAlign = 'center';
     for (const shot of game.shots) {
       const chain = shot.kind === 'chain';
       const crit = shot.kind === 'crit';
       const twin = shot.kind === 'twin';
-      const start = Number.isFinite(shot.fromX) && Number.isFinite(shot.fromY) ? this.project(shot.fromX, shot.fromY) : muzzle;
+      const gun = shot.kind === 'shot' || crit ? 'bolt' : shot.kind;
+      const slot = game.armory?.mounts.findIndex(mount => mount.key === gun) ?? 0;
+      const start = Number.isFinite(shot.fromX) && Number.isFinite(shot.fromY)
+        ? this.project(shot.fromX, shot.fromY) : this.mountPoint(slot);
       const end = this.project(shot.x, shot.y);
+      if (shot.kind === 'scatter' || shot.kind === 'lance' || shot.kind === 'coil') {
+        this.paintMountShot(shot, start, end);
+        continue;
+      }
       const dx = end.x - start.x;
       const dy = end.y - start.y;
       const distance = Math.max(1, Math.hypot(dx, dy));
@@ -452,6 +526,9 @@ export class Field {
           }
           break;
         }
+        case 'cache':
+          ctx.fillText('[+] CACHE', clamp(p.x, 27, this.w - 27), Math.max(7, p.y - 8 - phase * 16));
+          break;
         case 'heal':
           for (let i = 0; i < 3; i++) ctx.fillText('+', p.x + (i - 1) * 7, p.y - 3 - phase * 14 - (i % 2) * 6);
           break;

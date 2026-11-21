@@ -1,103 +1,12 @@
-// Run with: node --test tests/roguelike.mjs
+// Run the complete suite with node --test tests/*.mjs
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { Game } from '../engine.js';
 import { ENEMIES, POWERS, UPGRADES } from '../content.js';
 import { saveCheckpoint, clearCheckpoint } from '../checkpoint.js';
-
-const RECORDS_KEY = 'last-spire.records.v1';
-const CHECKPOINT_KEY = 'last-spire.checkpoint.v2';
-
-class MemoryStorage {
-  items = new Map();
-  getItem(key) { return this.items.get(key) ?? null; }
-  setItem(key, value) { this.items.set(key, String(value)); }
-  removeItem(key) { this.items.delete(key); }
-}
-
-// Park-Miller with a positive, nonzero seed. Every enemy, shot and offered
-// relic uses the same injected stream as the production simulation.
-function seededRandom(seed) {
-  let state = seed;
-  return () => {
-    state = state * 16807 % 2147483647;
-    return (state - 1) / 2147483646;
-  };
-}
-
-function start(seed = 19, storage = new MemoryStorage(), resume = false) {
-  return new Game({ random: seededRandom(seed), storage, resume });
-}
-
-const precision = {
-  name: 'Precision',
-  weights: { damage: 1.55, rate: 1.3, crit: 0.95, range: 0.5, bounty: 0.45, chain: 0.25, splash: 0.22, armor: 0.15, regen: 0.1 },
-  relics: ['headhunter', 'ember', 'overclock', 'twinshot', 'ward', 'scope']
-};
-const ordnance = {
-  name: 'Ordnance',
-  weights: { splash: 1.25, chain: 1.15, rate: 0.96, damage: 0.9, range: 0.65, bounty: 0.45, armor: 0.22, regen: 0.18, crit: 0.12 },
-  relics: ['fracture', 'tesla', 'repulse', 'frost', 'twinshot', 'overclock']
-};
-
-// A player can reproduce these builds by saving for the lowest price relative
-// to priority. No scrap grants, clock jumps, enemy edits or extra draft rerolls.
-function shop(game, build) {
-  for (;;) {
-    const keys = Object.keys(build.weights);
-    keys.sort((a, b) => game.cost(a) / build.weights[a] - game.cost(b) / build.weights[b]);
-    const key = keys[0];
-    const price = game.cost(key);
-    if (!Number.isFinite(price) || price > game.scrap) return;
-    const before = game.scrap;
-    const level = game.levels[key];
-    assert.equal(game.buy(key), true);
-    assert.equal(game.levels[key], level + 1);
-    assert.equal(game.scrap, before - price);
-  }
-}
-
-function takeRelic(game, priority) {
-  assert.equal(game.status, 'draft');
-  assert.equal(game.choices.length, 3);
-  assert.equal(new Set(game.choices).size, 3);
-  for (const key of game.choices) {
-    assert.ok(Object.hasOwn(POWERS, key), 'Draft offered unknown relic ' + key);
-    const cap = POWERS[key].maxStacks;
-    assert.ok(cap == null || (game.powers[key] || 0) < cap, 'Draft offered exhausted relic ' + key);
-  }
-  const chosen = priority.find(key => game.choices.includes(key)) ?? game.choices[0];
-  const before = game.powers[chosen] || 0;
-  assert.equal(game.pickPower(chosen), true);
-  assert.equal(game.powers[chosen], before + 1);
-  return chosen;
-}
-
-function play(game, build, limit, onStep = () => {}) {
-  while (game.status !== 'over' && game.time < limit - 1e-7) {
-    if (game.status === 'draft') {
-      takeRelic(game, build?.relics || []);
-      continue;
-    }
-    assert.equal(game.status, 'running');
-    if (build) shop(game, build);
-    const before = game.time;
-    game.update(Math.min(1, limit - before));
-    assert.ok(game.time > before || game.status !== 'running', 'Combat clock stalled');
-    onStep(game);
-  }
-}
-
-function snapshotCombat(game) {
-  return structuredClone({
-    run: game.run, status: game.status, time: game.time, hp: game.hp,
-    starterReady: game.starterReady, doctrine: game.doctrine, selected: game.selected,
-    draftReason: game.draftReason, warning: game.warning, queue: game.queue, focusId: game.focusId,
-    scrap: game.scrap, kills: game.kills, enemies: game.enemies,
-    levels: game.levels, choices: game.choices, powers: game.powers,
-    nextDraft: game.nextDraft, nextBoss: game.nextBoss, bossKills: game.bossKills
-  });
-}
+import {
+  CHECKPOINT_KEY, RECORDS_KEY, MemoryStorage, start, precision, ordnance,
+  play, takeRelic, snapshotCombat
+} from './support/gameplay.mjs';
 
 test('v1 lifetime records grant the old blueprints on a new run', () => {
   const storage = new MemoryStorage();
@@ -116,27 +25,43 @@ test('v1 lifetime records grant the old blueprints on a new run', () => {
   assert.equal(game.progress.totalKills, 175);
 });
 
-test('the shop rejects unknown, unaffordable and capped purchases without spending scrap', () => {
-  const game = start();
-  const startScrap = game.scrap;
-  assert.equal(game.buy('not-an-upgrade'), false);
-  assert.equal(game.scrap, startScrap);
-  // Isolate catalog and price boundaries; the seeded full runs below earn their own scrap.
-  for (const [key, upgrade] of Object.entries(UPGRADES)) {
-    while (game.levels[key] < upgrade.maxLevel) {
-      const cost = game.cost(key);
-      assert.ok(Number.isSafeInteger(cost) && cost > 0);
-      game.scrap = cost - 1;
-      assert.equal(game.buy(key), false);
-      assert.equal(game.scrap, cost - 1);
-      game.scrap = cost;
-      assert.equal(game.buy(key), true);
-      assert.equal(game.scrap, 0);
-    }
-    assert.equal(game.cost(key), Infinity);
-    assert.equal(game.buy(key), false);
-    assert.equal(game.levels[key], upgrade.maxLevel);
+test('the relic deck presents varied families, avoids recent alternatives, and keeps rares for boss rewards', () => {
+  const rarities = Object.values(POWERS).filter(power => !power.reserve).map(power => power.rarity);
+  assert.ok(rarities.filter(r => r === 'common').length >= 15);
+  assert.ok(rarities.filter(r => r === 'uncommon').length >= 8);
+  assert.ok(rarities.filter(r => r === 'rare').length >= 6);
+  const game = start(211);
+  const seen = new Set();
+  const history = [];
+  const reasons = ['starter','time','time','time','boss','boss'];
+  for (const reason of reasons) {
+    game.openDraft(reason);
+    const offered = [...game.choices];
+    assert.equal(new Set(offered).size, 3);
+    assert.ok(new Set(offered.map(key => POWERS[key].family)).size >= 2);
+    assert.ok(offered.every(key => reason === 'boss' ? POWERS[key].rarity === 'rare' : POWERS[key].rarity !== 'rare'));
+    if (history.length) assert.ok(offered.every(key => !history.at(-1).includes(key)), 'Immediate repeated offer');
+    for (const key of offered) seen.add(key);
+    history.push(offered);
+    takeRelic(game, []);
   }
+  assert.ok(seen.size >= 15);
+  assert.ok(game.draftHistory.length >= 3);
+});
+
+test('combat history retains the latest 100 entries in reverse chronological order across reloads', () => {
+  const storage = new MemoryStorage();
+  const game = start(37, storage);
+  for (let i = 0; i < 125; i++) {
+    game.time = i / 2;
+    game.note('Contact ' + i, 'contact');
+  }
+  assert.equal(game.log.length, 100);
+  assert.equal(game.log[0].text, 'Contact 124');
+  assert.equal(game.log.at(-1).text, 'Contact 25');
+  for (let i = 1; i < game.log.length; i++) assert.ok(game.log[i].time <= game.log[i - 1].time);
+  assert.equal(saveCheckpoint(game), true);
+  assert.deepEqual(start(83, storage, true).log, game.log);
 });
 
 test('opening relic is optional and can be secured only once', () => {
@@ -285,7 +210,7 @@ test('one kill on the draft boundary preserves both distinct rewards across a re
   play(game, precision, 119.99);
   const boss = game.spawn('sovereign', 9, 0);
   boss.hp = 1;
-  game.gunClock = 0;
+  game.armory.mounts[0].cooldown = 0;
   assert.ok(game.focus(boss.id));
   game.update(1);
   assert.equal(game.bossKills, 1);
@@ -319,12 +244,12 @@ test('splitters leave live offspring; shields and healing change the damage need
 
   game.enemies = [];
   const aegis = game.spawn('aegis', 24, 0);
-  game.gunClock = 0;
+  game.armory.mounts[0].cooldown = 0;
   game.update(0.05);
   assert.ok(aegis.shield < aegis.maxShield);
   assert.equal(aegis.hp, aegis.maxHp);
   const hitShield = aegis.shield;
-  game.gunClock = 60;
+  game.armory.mounts[0].cooldown = 60;
   const cantor = game.spawn('cantor', 78, 0);
   const wounded = game.spawn('brute', 76, 0);
   wounded.hp = 2;
@@ -422,7 +347,7 @@ for (const build of [precision, ordnance]) {
       game.openStarter();
       takeRelic(game, build.relics);
       let bosses = 0;
-      play(game, build, 405, () => {
+      play(game, build, 450, () => {
         for (const enemy of game.enemies) {
           types.add(enemy.type);
           tiers.add(enemy.tier);
@@ -430,7 +355,7 @@ for (const build of [precision, ordnance]) {
         if (game.bossKills > bosses) {
           assert.equal(game.status, 'draft');
           assert.equal(game.draftReason, 'boss');
-          assert.ok(game.choices.some(id => ['twinshot','ward','repulse'].includes(id)));
+          assert.ok(game.choices.some(id => POWERS[id].rarity === 'rare'));
           confirmedBossDrafts.push(game.time);
           bosses = game.bossKills;
         }
@@ -446,3 +371,29 @@ for (const build of [precision, ordnance]) {
     assert.ok(confirmedBossDrafts.length >= victors * 2);
   });
 }
+
+
+test('one veteran purchase policy still produces different builds after eight minutes', t => {
+  const seeds = [29, 97, 313, 1381, 1877, 2927, 3833, 4451];
+  const builds = new Set(), profiles = new Set(), openers = new Set(), ranks = [];
+  for (const seed of seeds) {
+    const storage = new MemoryStorage();
+    storage.setItem(RECORDS_KEY, JSON.stringify({ runs: 20, totalKills: 1300, best: 850 }));
+    const game = start(seed, storage);
+    game.openStarter();
+    openers.add([...game.choices].sort().join('/'));
+    takeRelic(game, precision.relics);
+    play(game, precision, 480);
+    profiles.add(game.profile);
+    if (game.time >= 480 - 1e-7) {
+      builds.add(Object.values(game.levels).join('/'));
+      ranks.push(Object.values(game.levels).reduce((total, level) => total + level, 0));
+    }
+  }
+  t.diagnostic(ranks.length + '/' + seeds.length + ' reached 08:00 with ' + builds.size +
+    ' rank distributions, ' + profiles.size + ' encounter profiles and ' + openers.size + ' opening offers.');
+  assert.ok(ranks.length >= 4, 'Veteran builds can reach eight minutes.');
+  assert.ok(builds.size >= 4 && profiles.size >= 3 && openers.size >= 4);
+  const maxRanks = Object.values(UPGRADES).reduce((sum, row) => sum + row.maxLevel, 0);
+  assert.ok(ranks.filter(total => total < maxRanks).length >= 4);
+});

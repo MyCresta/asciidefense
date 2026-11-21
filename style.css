@@ -357,3 +357,95 @@ dialog::backdrop { background:#000c; }
 .combo-hint { color:var(--accent); font-size:.64rem; line-height:1.45; margin:-8px 0 15px; }
 .dossier-list .active-combo strong,.combo-ready { color:var(--accent); }
 @media (max-width:700px) { .combo-hint { grid-column:2; margin:0 0 5px; } }
+
+/* Playback and encounter readout */
+.top-tools { margin-left:auto; display:flex; flex-direction:column; align-items:flex-end; gap:1px; }
+.speedbar { display:flex; align-items:center; gap:3px; }
+.speedbar>span { margin-right:4px; color:var(--muted); letter-spacing:.09em; font-size:.57rem; }
+.speed-button { padding:3px 1px; color:var(--muted); line-height:1; font-size:.72rem; }
+.speed-button::before { content:'[' / ''; }
+.speed-button::after { content:']' / ''; }
+.speed-button::before,.speed-button::after { visibility:hidden; }
+.speed-button:is([aria-pressed=true],:hover,:focus-visible) { color:var(--accent); }
+.speed-button:is([aria-pressed=true],:hover,:focus-visible)::before,
+.speed-button:is([aria-pressed=true],:hover,:focus-visible)::after { visibility:visible; }
+.speed-button:focus-visible { outline-offset:0; }
+.battlefield>.section-head { justify-content:flex-start; }
+#field-profile { min-width:0; color:var(--muted); font-size:.68rem; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#field-profile:hover,#field-profile:focus-visible { color:var(--accent); }
+#live { margin-left:auto; white-space:nowrap; }
+#open-log { font:inherit; text-transform:inherit; letter-spacing:inherit; text-align:left; }
+#open-log span { font-weight:400; color:var(--muted); }
+#open-log:hover span { color:var(--accent); }
+.workshop-button .upgrade-level { white-space:normal; line-height:1.25; }
+.workshop-button:disabled .cost { color:var(--muted); }
+.workshop-button .cost { flex:none; }
+
+/* Fitting, salvage and combat history */
+.armory-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.armory-card { min-height:151px; padding:13px; }
+.armory-card .power-sigil { min-height:0; font-size:10px; margin:12px 0 6px; }
+.armory-card .power-effect { margin:6px 0 10px; }
+.armory-card:disabled .draft-select { color:var(--muted); }
+.mount-intro,.refit-hint,.profile-desc,.profile-tactic { font-size:.78rem; line-height:1.55; }
+.mount-intro,.refit-hint { margin-bottom:10px; }
+.refit-hint,.profile-tactic { color:var(--muted); }
+.profile-desc { margin:7px 0 3px; }
+.weapon-label { display:block; font-size:.8rem; color:var(--ink); margin:18px 0 7px; }
+.weapon-choices { flex-wrap:wrap; margin-left:-6px; row-gap:1px; }
+.log-caption { margin-bottom:10px; color:var(--muted); letter-spacing:.08em; font-size:.64rem; }
+.history-lines { padding:0; list-style:none; }
+.history-lines li { display:grid; grid-template-columns:5.3ch minmax(0,1fr); gap:1.4ch; padding:4px 0; font-size:.78rem; line-height:1.4; }
+.history-lines time { color:var(--muted); font-variant-numeric:tabular-nums; }
+.event-boss .history-event,.event-upgrade .history-event,.event-relic .history-event { color:var(--accent); }
+.log-view:focus-visible { outline:1px dashed var(--line); outline-offset:-2px; }
+.blueprint-gain { font-size:.72rem; color:var(--accent); line-height:1.4; margin:-10px 0 12px; }
+#cache-actions { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:10px 18px; margin-top:16px; }
+.cache-control { font-size:.78rem; padding:4px 0; }
+.cache-control:disabled,#cache-wallet { color:var(--muted); }
+#cache-wallet { margin-right:auto; font-size:.67rem; }
+@media (max-width:700px) {
+  .speedbar { gap:2px; } .speed-button { font-size:.64rem; }
+  #field-profile { font-size:.58rem; }
+  .side { grid-template-rows:auto 173px; }
+  .workshop-button .upgrade-copy { gap:7px; }
+  .workshop-button .upgrade-level { font-size:.61rem; }
+  .blueprint-gain { grid-column:2; margin:0 0 3px; font-size:.64rem; }
+  .armory-card { display:flex; min-height:0; }
+  #cache-actions { gap:6px 12px; }
+}
+@media (max-width:520px) {
+  .masthead { row-gap:1px; }
+  .top-tools { display:contents; }
+  .controls { grid-column:2; grid-row:1; }
+  .speedbar { grid-column:1/-1; justify-self:end; }
+  .workshop-button .upgrade-copy { flex-direction:column; align-items:flex-start; gap:1px; }
+  .workshop-button .upgrade-icon { font-size:6px; }
+}
+@media (max-height:520px) and (orientation:landscape) {
+  .top-tools { margin-left:auto; display:flex; flex-direction:row-reverse; align-items:center; gap:10px; }
+  .speedbar { gap:0; }
+  .speedbar>span { display:none; }
+  .speed-button { font-size:.58rem; }
+  .workshop-button .upgrade-copy { flex-direction:column; align-items:flex-start; gap:0; }
+  .workshop-button .upgrade-level { font-size:.52rem; }
+  .side { grid-template-rows:minmax(0,.80fr) minmax(0,1.20fr); }
+  .blueprint-gain { margin:0 0 3px; }
+}
+@media (max-width:700px) and (max-height:520px) { .side { grid-template-rows:24px minmax(0,1fr); } }
+
+@media (max-width:370px) and (orientation:portrait) {
+  #wordmark { font-size:3.6px; }
+  .feed #run-number { display:none; }
+  .feed-head #open-log { white-space:nowrap; }
+  .armory-grid { grid-template-columns:1fr; }
+  .armory-card { display:grid; grid-template-columns:48px minmax(0,1fr); }
+  .armory-card .power-sigil { margin:auto; }
+}
+@media (min-width:701px) and (max-height:520px) {
+  .workshop-button .upgrade-copy { gap:0; }
+  .workshop-button .upgrade-level { line-height:1.05; }
+}
+@media (pointer:coarse) and (min-height:521px) {
+  .speed-button { min-height:24px; min-width:28px; }
+}

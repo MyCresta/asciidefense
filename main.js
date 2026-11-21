@@ -1,10 +1,15 @@
-import { Game, formatTime } from './engine.js?v=2.0.0';
-import { DOCTRINES, ENEMIES, POWERS, SYNERGIES, UPGRADES } from './content.js?v=2.0.0';
-import { TITLE, PORTRAIT, ENEMY_PORTRAITS } from './art.js?v=2.0.0';
-import { Field } from './field.js?v=2.0.0';
-import { saveCheckpoint } from './checkpoint.js?v=2.0.0';
-import { runPanels } from './run-panels.js?v=2.0.0';
-import { $, pad, decorateFrame, drawStats, element, setText, tierName } from './ui.js?v=2.0.0';
+import { SPEEDS, SimulationClock } from './clock.js?v=3.0.0';
+import { initAppearance } from './appearance.js?v=3.0.0';
+import { workbench } from './workbench-ui.js?v=3.0.0';
+import { pickBlueprint } from './workshop.js?v=3.0.0';
+import { WEAPONS, maxWeaponRange } from './weapons.js?v=3.0.0';
+import { Game, formatTime } from './engine.js?v=3.0.0';
+import { DOCTRINES, ENEMIES, POWERS, RUN_PROFILES, SYNERGIES } from './content.js?v=3.0.0';
+import { TITLE, PORTRAIT, ENEMY_PORTRAITS } from './art.js?v=3.0.0';
+import { Field } from './field.js?v=3.0.0';
+import { saveCheckpoint } from './checkpoint.js?v=3.0.0';
+import { runPanels } from './run-panels.js?v=3.0.0';
+import { $, pad, decorateFrame, drawStats, element, setText, tierName } from './ui.js?v=3.0.0';
 
 const root = document.documentElement;
 function preference(key, fallback) {
@@ -16,15 +21,13 @@ function savePreference(key, value) {
 
 const game = new Game({ resume: true });
 const field = new Field($('field'), game, inspect);
-const themes = {terminal: 'Terminal', mono: 'Monochrome', amber: 'Amber', ice: 'Glacier'};
-const groups = ['arsenal', 'munitions', 'chassis'];
-let shopGroup = 'arsenal';
-let upgradeKeys = [];
+const clock = new SimulationClock();
+let speed = Number(preference('speed','1'));
+if (!SPEEDS.includes(speed)) speed = 1;
 const side = document.querySelector('.side');
 const dialog = $('record-dialog');
 const cursor = $('ascii-cursor');
-const themeMenu = $('theme-menu');
-const panels = runPanels(game, {pick: installRelic, start: restart, refresh: refreshUI});
+const panels = runPanels(game, {pick: installRelic, start: restart, refresh: refreshUI, changed: commitAction});
 let nextCheckpoint = 0;
 let rackSignature = '';
 let previousDraft = '';
@@ -35,6 +38,7 @@ let logHead;
 let previousKills = 0;
 let previousHp = game.hp;
 let previousStatus;
+let lastProfile = '';
 let inspectedSnapshot = '';
 let nextHud = 0;
 let previousFrame;
@@ -44,46 +48,27 @@ $('wordmark').textContent = TITLE.join('\n');
 root.style.setProperty('--rule', '"' + '-'.repeat(512) + '"');
 document.querySelectorAll('.frame').forEach(decorateFrame);
 
-function applyTheme(theme) {
-  const selected = Object.hasOwn(themes, theme) ? theme : 'terminal';
-  root.dataset.theme = selected;
-  setText($('theme-name'), themes[selected]);
-  for (const button of themeMenu.querySelectorAll('button')) {
-    const active = button.dataset.theme === selected;
-    button.setAttribute('aria-pressed', String(active));
-    setText(button, (active ? '[x] ' : '[ ] ') + themes[button.dataset.theme]);
+const appearance = initAppearance({onChange: () => field.render(game.time)});
+const shop = workbench(game, {changed: commitAction, showMount: slot => panels.showDossier('armory', slot)});
+function updateSpeed() {
+  for (const button of $('speed-controls').children) {
+    if (button.dataset.speed) button.setAttribute('aria-pressed',String(Number(button.dataset.speed) === speed));
   }
-  savePreference('theme', selected);
 }
-function closeThemes(focus = false) {
-  themeMenu.hidden = true;
-  $('theme-button').setAttribute('aria-expanded', 'false');
-  if (focus) $('theme-button').focus();
-}
-for (const key of Object.keys(themes)) {
-  const button = element('button');
-  button.dataset.theme = key;
-  button.addEventListener('click', () => {
-    applyTheme(key);
-    closeThemes(true);
-    field.render(game.time);
+for (const rate of SPEEDS) {
+  const button = element('button','speed-button',rate + 'x');
+  button.dataset.speed = String(rate);
+  button.setAttribute('aria-label','Game speed ' + rate + 'x');
+  button.addEventListener('click',() => {
+    speed = rate;
+    previousFrame = undefined;
+    clock.reset();
+    savePreference('speed',String(rate));
+    updateSpeed();
   });
-  themeMenu.append(button);
+  $('speed-controls').append(button);
 }
-applyTheme(preference('theme', 'terminal'));
-$('theme-button').addEventListener('click', () => {
-  if (!themeMenu.hidden) return closeThemes(true);
-  themeMenu.hidden = false;
-  $('theme-button').setAttribute('aria-expanded', 'true');
-  themeMenu.querySelector('[aria-pressed=true]').focus();
-});
-document.addEventListener('pointerdown', event => {
-  if (!event.target.closest('.theme-control')) closeThemes();
-});
-document.querySelector('.theme-control').addEventListener('focusout', event => {
-  if (!event.currentTarget.contains(event.relatedTarget)) closeThemes();
-});
-
+updateSpeed();
 function playTone(pitch, duration = 0.06, type = 'triangle') {
   if (!sound || audio?.state !== 'running') return;
   const oscillator = audio.createOscillator();
@@ -135,68 +120,20 @@ function inspect(id) {
   playTone(360, 0.035);
 }
 
-const upgradeControls = new Map();
-function selectGroup(group) {
-  if (!groups.includes(group)) return;
-  shopGroup = group;
-  upgradeKeys = Object.keys(UPGRADES).filter(key => UPGRADES[key].group === group);
-  for (const button of $('shop-tabs').children) button.setAttribute('aria-pressed', String(button.dataset.group === group));
-  upgradeControls.clear();
-  const rows = upgradeKeys.map((key, i) => {
-    const upgrade = UPGRADES[key];
-    const row = element('button', 'upgrade-row');
-    const icon = element('pre', 'upgrade-icon', upgrade.icon);
-    icon.setAttribute('aria-hidden','true');
-    const copy = element('span','upgrade-copy');
-    const name = element('span','upgrade-name',upgrade.label);
-    const keyNumber = element('span','key-number',' [' + (i + 1) + ']');
-    keyNumber.setAttribute('aria-hidden','true');
-    name.append(keyNumber);
-    const level = element('span','upgrade-level');
-    copy.append(name, level);
-    const price = element('span','cost');
-    row.append(icon, copy, price);
-    row.addEventListener('click', () => purchase(key));
-    row.setAttribute('aria-keyshortcuts', String(i + 1));
-    upgradeControls.set(key, {row,level,price});
-    return row;
-  });
-  $('upgrade-list').replaceChildren(...rows);
-  renderShop();
-}
-for (const button of $('shop-tabs').children) button.addEventListener('click', () => selectGroup(button.dataset.group));
-function purchase(key) {
-  if (dialog.open || !['running', 'paused'].includes(game.status)) return;
-  if (game.buy(key)) {
-    saveCheckpoint(game);
-    playTone(650, 0.12);
-    setText($('announcer'), game.log[0].text);
-  } else {
-    const cost = game.cost(key);
-    const msg = Number.isFinite(cost) ? 'Need $' + (cost - game.scrap) + ' more scrap.' : 'Already at maximum level.';
-    setText($('announcer'), msg);
-    const control = upgradeControls.get(key);
-    control.row.title = msg;
-    setText(control.price, Number.isFinite(cost) ? '-$' + (cost - game.scrap) : 'MAX');
-    control.feedbackUntil = performance.now() + 850;
-    playTone(110, 0.06);
-  }
-  renderHud();
-}
 function renderInspector() {
   const enemy = game.enemies.find(e => e.id === game.selected);
   const type = enemy && ENEMIES[enemy.type];
   const flags = enemy && [enemy.shield > 0 ? 'Shield ' + Math.ceil(enemy.shield) : '', enemy.burnUntil > game.time ? 'Burning' : '', enemy.slowUntil > game.time ? 'Slowed' : ''].filter(Boolean);
   const stats = enemy
     ? [['Integrity', Math.ceil(enemy.hp) + '/' + Math.ceil(enemy.maxHp)], ['Impact', enemy.damage + ' HP'], [flags.length ? 'Status' : 'Speed', flags.length ? flags.join(' / ') : concise(enemy.speed) + ' u/s'], ['Bounty', '$' + enemy.reward]]
-    : [['Damage', concise(game.damage) + ' HP'], ['Range', concise(game.range) + ' u'], ['Fire rate', game.rate.toFixed(2) + '/s'], ['Splash', game.splash ? concise(game.splash) + ' u' : 'Off']];
-  const signature = [enemy?.id || 'tower', enemy?.tier, game.doctrine, game.focusId, JSON.stringify(stats)].join('/');
+    : [['Damage', concise(game.damage) + ' HP'], ['Max reach', concise(maxWeaponRange(game)) + ' u'], ['Main rate', (game.rate * WEAPONS[game.armory.mounts[0].key].cadence).toFixed(2) + '/s'], ['Splash', game.splash ? concise(game.splash) + ' u' : 'Off']];
+  const signature = [enemy?.id || 'tower', enemy?.tier, game.doctrine, game.armory.mounts[0].key, game.focusId, JSON.stringify(stats)].join('/');
   if (signature === inspectedSnapshot) return;
   inspectedSnapshot = signature;
   setText($('portrait'), (enemy ? ENEMY_PORTRAITS[enemy.type] : PORTRAIT).join('\n'));
   setText($('entity-class'), enemy ? (enemy.boss ? '[!] BOSS' : enemy.elite ? '[!] ELITE' : '[-] HOSTILE') : '[+] FRIENDLY');
   setText($('entity-name'), enemy ? type.name : 'The Spire');
-  setText($('entity-type'), enemy ? 'Tier ' + tierName(enemy.tier) + ' / ' + type.trait : DOCTRINES[game.doctrine].name + ' tower');
+  setText($('entity-type'), enemy ? 'Tier ' + tierName(enemy.tier) + ' / ' + type.trait : WEAPONS[game.armory.mounts[0].key].name);
   $('entity-type').title = type?.description || 'Prioritizes the closest hostile in range.';
   setText($('inspect-action'), enemy ? game.focusId === enemy.id ? '[ Release ]' : '[ Focus fire ]' : '[ Build ]');
   $('inspect-action').setAttribute('aria-haspopup', enemy ? 'false' : 'dialog');
@@ -218,33 +155,6 @@ function renderLog() {
   $('messages').replaceChildren(...messages);
 }
 function concise(value) { return String(Number(value.toFixed(1))); }
-function upgradeValue(key) {
-  const values = {
-    range: concise(game.range) + ' u', rate: game.rate.toFixed(2) + '/s',
-    splash: concise(game.splash) + ' u', damage: concise(game.damage) + ' HP',
-    crit: Math.round(game.critChance * 100) + '%', chain: game.chain + ' jumps',
-    armor: concise(game.armor) + ' HP', regen: concise(game.regen) + ' HP/s',
-    bounty: '+' + Math.round(game.bounty * 100) + '%'
-  };
-  return values[key];
-}
-function renderShop() {
-  for (const [key,control] of upgradeControls) {
-    const cost = game.cost(key);
-    const maximum = !Number.isFinite(cost);
-    const lv = game.levels[key];
-    const data = UPGRADES[key];
-    control.row.setAttribute('aria-disabled',String(game.scrap < cost || !['running', 'paused'].includes(game.status)));
-    control.row.setAttribute('aria-label', data.name + ' level ' + lv + (maximum ? ', maxed' : ', upgrade for ' + cost + ' scrap'));
-    const combo = Object.values(SYNERGIES).find(item => item.upgrade === key && game.powers[item.power] && item.level === lv + 1);
-    setText(control.level, 'LV.' + pad(lv) + ' / ' + (combo ? combo.name : upgradeValue(key)));
-    control.level.classList.toggle('combo-ready', Boolean(combo));
-    if (!(performance.now() < control.feedbackUntil)) {
-      setText(control.price, maximum ? '[ MAX ]' : '[ $' + cost + ' ]');
-      control.row.title = data.description + (combo ? ' Activates ' + combo.name + '. ' + combo.description : '') + (maximum ? ' Maximum level.' : ' Cost: $' + cost + '.');
-    }
-  }
-}
 function updateRack() {
   const owned = Object.keys(game.powers).filter(k => game.powers[k] > 0);
   setText($('relic-timer'), 'DRAFT IN ' + formatTime(Math.ceil(Math.max(0, game.nextDraft - game.time))));
@@ -272,16 +182,17 @@ function updateSiege() {
   }
 }
 function updateStatus() {
+  if (game.status === 'draft' || game.status === 'cache') appearance.close();
   panels.syncDraft();
   if (previousStatus === game.status) return;
   previousStatus = game.status;
   const over = game.status === 'over';
   const active = game.status === 'running';
-  const draft = game.status === 'draft';
+  const draft = game.status === 'draft' || game.status === 'cache';
   setText($('pause-icon'), active ? 'II' : '>');
-  setText($('pause-text'), over ? 'Retry' : active ? 'Pause' : draft ? 'Draft' : 'Resume');
+  setText($('pause-text'), over ? 'Retry' : active ? 'Pause' : draft ? 'Choose' : 'Resume');
   $('pause').disabled = draft;
-  setText($('live'), active ? '[*] LIVE' : over ? '[x] OFFLINE' : draft ? '[*] DRAFT' : '[=] PAUSED');
+  setText($('live'), active ? '[*] LIVE' : over ? '[x] OFFLINE' : draft ? (game.status === 'cache' ? '[+] CACHE' : '[*] DRAFT') : '[=] PAUSED');
   $('live').classList.toggle('idle',!active);
   $('field-overlay').hidden = active || draft;
   if (active || draft) return;
@@ -302,7 +213,13 @@ function renderHud() {
   setText($('threat'), pad(game.threat));
   setText($('threat-label'), game.threat < 2 ? 'LOW' : game.threat < 4 ? 'RISING' : game.threat < 7 ? 'HIGH' : 'SEVERE');
   setText($('run-number'), 'RUN ' + pad(game.run,3));
-  renderShop(); updateRack(); updateSiege();
+  if (lastProfile !== game.profile) {
+    lastProfile = game.profile;
+    const profile = RUN_PROFILES[game.profile];
+    setText($('field-profile'),'/ ' + profile.name);
+    $('field-profile').title = profile.description + ' ' + profile.tactic;
+  }
+  shop.render(); updateRack(); updateSiege();
   const coord = value => (value < 0 ? '-' : '+') + pad(Math.min(999,Math.abs(Math.round(value || 0))),3);
   setText($('coord-x'),coord(field.pointer?.x));
   setText($('coord-y'),coord(field.pointer?.y));
@@ -313,16 +230,27 @@ function renderHud() {
 }
 function refreshUI() {
   previousFrame = undefined;
+  clock.reset();
   renderHud(); field.render(game.time);
 }
-function restart(key) {
-  game.restart(key);
+function commitAction() {
+  saveCheckpoint(game);
+  playTone(580, 0.08);
+  setText($('announcer'), game.log[0]?.text || '');
+  refreshUI();
+}
+function restart(key, primary = game.armory.mounts[0].key) {
+  game.restart(key,primary);
   selectTab(false);
-  selectGroup('arsenal');
+  shop.select('salvage');
   saveCheckpoint(game);
   refreshUI();
 }
 function installRelic(key) {
+  if (game.status === 'cache') {
+    if (pickBlueprint(game,key)) { lastChoiceAt = performance.now(); commitAction(); }
+    return;
+  }
   if (!key || !game.pickPower(key)) return;
   lastChoiceAt = performance.now();
   saveCheckpoint(game);
@@ -331,7 +259,7 @@ function installRelic(key) {
   refreshUI();
 }
 function togglePlay() {
-  if (dialog.open || game.status === 'draft') return;
+  if (dialog.open || game.status === 'draft' || game.status === 'cache') return;
   if (game.status === 'over') return restart(game.doctrine);
   game.togglePause();
   saveCheckpoint(game); refreshUI();
@@ -352,24 +280,23 @@ $('range-toggle').addEventListener('click', () => {
   field.render(game.time);
 });
 
-$('records').addEventListener('click', () => { closeThemes(); panels.showDossier('build'); });
+$('records').addEventListener('click', () => { appearance.close(); panels.showDossier('build'); });
+$('field-profile').addEventListener('click',() => panels.showDossier('build'));
+document.querySelector('.feed').addEventListener('click',() => panels.showDossier('log'));
 document.addEventListener('keydown', event => {
-  if (event.altKey || event.ctrlKey || event.metaKey || event.repeat || dialog.open) return;
-  if (game.status === 'draft') {
+  if (event.altKey || event.ctrlKey || event.metaKey || event.repeat || dialog.open || appearance.isOpen || event.defaultPrevented) return;
+  if (game.status === 'draft' || game.status === 'cache') {
     if (/^[1-3]$/.test(event.key)) {
       event.preventDefault();
-      if (performance.now() - lastChoiceAt > 240) installRelic(game.choices[Number(event.key) - 1]);
+      const i = Number(event.key) - 1;
+      if (performance.now() - lastChoiceAt > 240) installRelic(game.status === 'cache' ? game.workshop.offer[i]?.key : game.choices[i]);
     }
-    return;
-  }
-  if (!themeMenu.hidden) {
-    if (event.key === 'Escape') { event.preventDefault(); closeThemes(true); }
     return;
   }
   if (event.code === 'Space' && !event.target.closest('button')) {
     event.preventDefault(); togglePlay();
   }
-  if (/^[1-3]$/.test(event.key)) { event.preventDefault(); purchase(upgradeKeys[Number(event.key)-1]); }
+  if (event.key.toLowerCase() === 'c') { event.preventDefault(); shop.open(); }
   if (event.key === 'Escape' && game.status !== 'over') { event.preventDefault(); togglePlay(); }
 });
 const fullscreen = $('fullscreen');
@@ -406,7 +333,7 @@ document.addEventListener('pointerout', event => {
 function frame(now) {
   if (!document.hidden) {
     const dt = previousFrame === undefined ? 0 : Math.min((now - previousFrame) / 1000,0.15);
-    game.update(dt);
+    clock.advance(game,dt,speed);
     const draftID = game.status === 'draft' ? game.draftReason + game.choices.join() : '';
     if (draftID !== previousDraft || (game.status === 'running' && now >= nextCheckpoint)) {
       saveCheckpoint(game);
@@ -428,9 +355,9 @@ function storeSession() {
 }
 document.addEventListener('visibilitychange', () => {
   previousFrame = undefined;
+  clock.reset();
   if (document.hidden) storeSession();
 });
 window.addEventListener('pagehide', storeSession);
-selectGroup(shopGroup);
 renderHud();
 requestAnimationFrame(frame);
