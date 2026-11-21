@@ -7,14 +7,14 @@
   <meta name="description" content="Defend the Last Spire in an endless, all-ASCII tower defense roguelike.">
   <title>Last Spire | ASCII Tower Defense</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="./style.css?v=1.0.2">
-  <script type="module" src="./main.js?v=1.0.2"></script>
+  <link rel="stylesheet" href="./style.css?v=2.0.0">
+  <script type="module" src="./main.js?v=2.0.0"></script>
 </head>
 <body>
   <main class="console">
     <header class="masthead">
       <h1 aria-label="Last Spire"><pre id="wordmark" aria-hidden="true">LAST SPIRE</pre></h1>
-      <span class="brand-description"><b>//</b> ASCII TOWER DEFENSE</span>
+      <span class="brand-description"><b>//</b> ROGUELIKE TOWER DEFENSE</span>
       <nav class="controls" aria-label="Game controls">
         <div class="theme-control">
           <button id="theme-button" aria-expanded="false" aria-controls="theme-menu" aria-label="Choose color theme"><span class="button-bracket">[</span><span class="theme-label">Theme: </span><strong id="theme-name">Terminal</strong> <span class="arrow">v</span><span class="button-bracket">]</span></button>
@@ -38,6 +38,7 @@
         <div class="section-head"><h2 id="field-title"><i aria-hidden="true">//</i> Battlefield</h2><span id="live" class="live">[*] LIVE</span></div>
         <div class="arena">
           <canvas id="field" tabindex="0" aria-label="Battlefield. Use arrow keys to cycle targets and Enter to inspect. Click or tap a unit to inspect it.">The Last Spire battlefield</canvas>
+          <div id="siege-alert" class="siege-alert" hidden></div>
           <div class="field-coords" aria-hidden="true">X <span id="coord-x">+000</span> &nbsp; Y <span id="coord-y">+000</span></div>
           <button id="range-toggle" aria-pressed="true">[x] Range</button>
           <div id="field-overlay" hidden>
@@ -46,19 +47,27 @@
               <h3 id="overlay-title"></h3>
               <div id="overlay-detail"></div>
               <button id="overlay-action" class="action-button"></button>
+              <button id="overlay-loadout" class="secondary-button">[ Change loadout ]</button>
             </div>
           </div>
         </div>
+        <div class="field-tray">
         <div class="feed">
           <div class="feed-head"><h2><i aria-hidden="true">&gt;_</i> Combat log</h2><span id="run-number">RUN 001</span></div>
           <ol id="messages" aria-label="Recent combat events"></ol>
+        </div>
+        <section class="relic-rack" aria-label="Run relics">
+          <div class="feed-head"><h2><i aria-hidden="true">*</i> Relics</h2><span id="relic-timer">DRAFT IN 02:00</span></div>
+          <button id="rack-action" aria-haspopup="dialog">[ Choose starting relic ]</button>
+          <div id="rack-summary"></div>
+        </section>
         </div>
       </section>
 
       <aside class="side" aria-label="Tower management">
         <div class="mobile-tabs"><button id="tab-inspector" aria-pressed="false">[ Inspector ]</button><button id="tab-upgrades" aria-pressed="true">[ Upgrades ]</button></div>
         <section class="frame inspector" aria-labelledby="inspect-title">
-          <div class="section-head"><h2 id="inspect-title"><i aria-hidden="true">//</i> Inspector</h2><span class="scope-mark" aria-hidden="true">[+]</span></div>
+          <div class="section-head"><h2 id="inspect-title"><i aria-hidden="true">//</i> Inspector</h2><button id="inspect-action" class="scope-action" aria-haspopup="dialog">[ Build ]</button></div>
           <div class="entity-card">
             <div class="portrait-area"><pre id="portrait" aria-hidden="true"></pre></div>
             <div class="entity-details">
@@ -71,6 +80,11 @@
         </section>
         <section class="frame upgrades" aria-labelledby="upgrade-title">
           <div class="section-head"><h2 id="upgrade-title"><i aria-hidden="true">//</i> Upgrades</h2><span id="available-scrap" class="balance">$25</span></div>
+          <div id="shop-tabs" class="switches" role="group" aria-label="Upgrade categories">
+            <button data-group="arsenal" aria-pressed="true">Arsenal</button>
+            <button data-group="munitions" aria-pressed="false">Munitions</button>
+            <button data-group="chassis" aria-pressed="false">Chassis</button>
+          </div>
           <div class="upgrade-list" id="upgrade-list"></div>
         </section>
       </aside>
@@ -79,14 +93,26 @@
     <footer>
       <div class="key-guide"><span><b>[Click]</b> Inspect</span><span><b>[1-3]</b> Upgrade</span><span><b>[Esc]</b> Pause</span></div>
       <div class="footer-actions"><button id="fullscreen" hidden aria-pressed="false">[ Fullscreen ]</button>
-      <button id="records" aria-haspopup="dialog"><span>[</span> Run records <span>]</span></button></div>
+      <button id="records" aria-haspopup="dialog"><span>[</span> Run dossier <span>]</span></button></div>
     </footer>
     <div id="announcer" class="sr-only" aria-live="polite"></div>
   </main>
 
-  <dialog id="record-dialog" class="frame">
-    <div class="section-head"><h2><i aria-hidden="true">//</i> Run records</h2><button id="close-records" aria-label="Close run records">[x]</button></div>
-    <div class="record-body"><dl class="record-stats" id="record-stats"></dl><h3>Permanent unlocks</h3><ul id="unlocks"></ul></div>
+  <dialog id="record-dialog" class="frame" aria-labelledby="dossier-title">
+    <div class="section-head"><h2 id="dossier-title"><i aria-hidden="true">//</i> Run dossier</h2><button id="close-records" aria-label="Close run dossier">[x]</button></div>
+    <div id="dossier-tabs" class="switches" role="group" aria-label="Dossier sections">
+      <button data-view="build">Build</button><button data-view="bestiary">Bestiary</button>
+      <button data-view="records">Records</button><button data-view="loadouts">Loadouts</button>
+    </div>
+    <div id="dossier-content" class="record-body"></div>
+  </dialog>
+  <dialog id="draft-dialog" class="frame" aria-labelledby="draft-title" aria-describedby="draft-prompt">
+    <div class="draft-head">
+      <div><div id="draft-kicker" class="eyebrow"></div><h2 id="draft-title" tabindex="-1">Choose a relic</h2></div>
+      <span class="draft-paused">[=] PAUSED</span>
+    </div>
+    <p id="draft-prompt">Install one effect for this run.</p>
+    <div id="draft-choices" class="draft-grid"></div>
   </dialog>
   <div id="ascii-cursor" aria-hidden="true">+</div>
   <noscript>Enable JavaScript to play Last Spire.</noscript>

@@ -1,7 +1,10 @@
-import { TOWER, ENEMY_ART } from './art.js?v=1.0.2';
+import { TOWER, TOWER_SMALL, ENEMY_ART } from './art.js?v=2.0.0';
 
 const FONT = '"Lucida Console", "Liberation Mono", "Courier New", monospace';
 const TAU = Math.PI * 2;
+const HALF_WORLD_WIDTH = 140;
+const HALF_WORLD_HEIGHT = 84;
+const TOWER_ANCHOR = .72;
 const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 
 function randomSequence(seed) {
@@ -19,17 +22,6 @@ function surface(width, height, ratio) {
   ctx.scale(ratio, ratio);
   ctx.textBaseline = 'middle';
   return { canvas, ctx, width, height };
-}
-
-// Give the area around the tower more screen space while keeping every entry edge visible.
-function mapDistance(distance, nearPixels, farPixels, farUnits, inverse = false) {
-  const nearUnits = 32;
-  if (inverse) {
-    if (distance <= nearPixels) return distance * nearUnits / nearPixels;
-    return nearUnits + (distance - nearPixels) * (farUnits - nearUnits) / (farPixels - nearPixels);
-  }
-  if (distance <= nearUnits) return distance * nearPixels / nearUnits;
-  return nearPixels + (distance - nearUnits) * (farPixels - nearPixels) / (farUnits - nearUnits);
 }
 
 function makeSprite(rows, lineHeight, ratio, colors, tower = false) {
@@ -60,8 +52,7 @@ function makeSprite(rows, lineHeight, ratio, colors, tower = false) {
       const char = line[col] || ' ';
       let color = colors.ink;
       if (tower) {
-        if (char === '*' || char === '@' || (row === 1 && char === '#')) color = colors.accent;
-        else if (row === 13 && char === '|' && [28, 29, 33, 34].includes(col)) color = colors.accent;
+        if (char === '*' || char === '@' || (row < 2 && char === '#')) color = colors.accent;
         else if (char === '.' || char === ':' || char === ';' || char === "'") color = colors.muted;
       } else if (/[oO@*]/.test(char)) color = colors.accent;
       if (color !== previous || col === end) {
@@ -86,6 +77,7 @@ export class Field {
     this.onInspect = onInspect;
     this.ctx = canvas.getContext('2d');
     this.pointer = { x: 0, y: 0 };
+    this.localPointer = null;
     this.hover = null;
     this.showRange = true;
     this.hitList = [];
@@ -100,14 +92,15 @@ export class Field {
     this.themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     canvas.addEventListener('pointermove', event => {
       const point = this.localPoint(event);
+      this.localPointer = point;
       this.pointer = this.unproject(point);
       this.hover = this.hitTest(point);
       this.keyTarget = null;
     });
-    canvas.addEventListener('pointerleave', () => { this.hover = null; });
+    canvas.addEventListener('pointerleave', () => { this.localPointer = this.hover = null; });
     canvas.addEventListener('blur', () => { this.keyTarget = null; });
     canvas.addEventListener('click', event => {
-      const target = this.hitTest(this.localPoint(event));
+      const target = this.hitTest(this.localPoint(event), event.pointerType === 'touch' || window.matchMedia?.('(pointer: coarse)').matches);
       if (target !== null) this.onInspect(target);
     });
     canvas.addEventListener('keydown', event => {
@@ -131,39 +124,44 @@ export class Field {
   }
 
   project(x, y) {
-    const g = this.geometry;
-    return {
-      x: g.ox + Math.sign(x) * mapDistance(Math.abs(x), g.rx, g.xEdge, 100),
-      y: g.oy + Math.sign(y) * mapDistance(Math.abs(y), g.ry, y < 0 ? g.north : g.south, 60)
-    };
+    const { ox, oy, sx, sy } = this.geometry;
+    return { x: ox + x * sx, y: oy + y * sy };
   }
 
   unproject(point) {
     if (!this.geometry) return { x: 0, y: 0 };
-    const g = this.geometry;
-    const dx = point.x - g.ox;
-    const dy = point.y - g.oy;
-    return {
-      x: Math.round(Math.sign(dx) * mapDistance(Math.abs(dx), g.rx, g.xEdge, 100, true)),
-      y: Math.round(Math.sign(dy) * mapDistance(Math.abs(dy), g.ry, dy < 0 ? g.north : g.south, 60, true))
-    };
+    const { ox, oy, sx, sy } = this.geometry;
+    return { x: Math.round((point.x - ox) / sx), y: Math.round((point.y - oy) / sy) };
   }
 
-  hitTest(point) {
-    // Hit in reverse paint order. Use a little extra room for the smaller enemies.
+  hitTest(point, touch = false) {
+    let nearest = null;
+    let nearestDistance = Infinity;
     for (let index = this.hitList.length - 1; index >= 0; index--) {
-      const hit = this.hitList[index];
-      const { x, y, sprite, id } = hit;
-      const pad = id === 'tower' ? 4 : 9;
-      if (point.y < y - pad || point.y > y + sprite.height + pad || point.x < x - pad || point.x > x + sprite.width + pad) continue;
-      if (id === 'tower') {
+      const { x, y, sprite, id } = this.hitList[index];
+      const dx = point.x - x - sprite.width / 2;
+      const dy = point.y - y - sprite.height / 2;
+      const halfW = sprite.width / 2;
+      const halfH = sprite.height / 2;
+      if (Math.abs(dx) <= halfW && Math.abs(dy) <= halfH) {
+        if (id !== 'tower') return id;
         const row = clamp(Math.floor((point.y - y - sprite.padding) / sprite.lineHeight), 0, sprite.bounds.length - 1);
         const { start, end } = sprite.bounds[row];
-        if (start < 0 || point.x < x + sprite.cell * start - pad || point.x > x + sprite.cell * end + pad) continue;
+        const col = (point.x - x - sprite.padding) / sprite.cell;
+        if (start >= 0 && col >= start - .5 && col <= end + .5) return id;
       }
-      return id;
+      if (id === 'tower') continue;
+      // Extend small targets to 44 CSS pixels on touch. A real sprite hit wins
+      // over the padded bounds of another unit moving past it.
+      const pad = touch ? 22 : 0;
+      if (Math.abs(dx) > Math.max(halfW + 4, pad) || Math.abs(dy) > Math.max(halfH + 4, pad)) continue;
+      const distance = dx * dx + dy * dy;
+      if (distance < nearestDistance) {
+        nearest = id;
+        nearestDistance = distance;
+      }
     }
-    return null;
+    return nearest;
   }
 
   prepare() {
@@ -185,20 +183,22 @@ export class Field {
     this.canvas.height = Math.round(h * ratio);
     this.ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     this.ctx.textBaseline = 'middle';
-    const ox = w * .5;
-    const oy = h * .585;
+    // A single linear projection drives positions, range, splash, and the
+    // pointer readout. Keep enough space at the edges to show arriving units.
+    const marginX = Math.min(w * .045, 32);
+    const marginY = Math.min(h * .06, 24);
     this.geometry = {
-      ox, oy, xEdge: ox - 4, north: oy - 4, south: h - oy - 4,
-      rx: Math.min(w * .258, h * .50), ry: Math.min(w * .142, h * .205)
+      ox: w / 2, oy: h / 2,
+      sx: (w / 2 - marginX) / HALF_WORLD_WIDTH,
+      sy: (h / 2 - marginY) / HALF_WORLD_HEIGHT
     };
-    const towerCols = Math.max(...TOWER.map(line => line.length));
-    const towerLine = Math.min(w * (w < 520 ? .41 : .345) / (towerCols * .624), h * .585 / TOWER.length, 9);
-    this.tower = makeSprite(TOWER, towerLine, ratio, this.colors, true);
-    this.enemySprites = {};
-    const enemyLine = clamp(Math.min(w / 79, h / 45), 6.6, 11.7);
-    for (const [type, rows] of Object.entries(ENEMY_ART)) {
-      this.enemySprites[type] = makeSprite(rows, enemyLine, ratio, this.colors);
-    }
+    const rows = w < 530 || h < 235 ? TOWER_SMALL : TOWER;
+    const cols = Math.max(...rows.map(line => line.length));
+    const size = Math.min(176, w * .195, h * .39);
+    const towerLine = Math.min(size / (cols * .624), size / rows.length);
+    this.tower = makeSprite(rows, towerLine, ratio, this.colors, true);
+    this.enemySprites = new Map();
+    this.enemyLine = clamp(Math.min(w / 128, h / 58), 4.7, 7.1);
     this.terrain = this.makeTerrain();
     this.cachedCircle = null;
     this.dirty = false;
@@ -245,7 +245,7 @@ export class Field {
       ctx.fillText('+', random() * w, random() * h);
     }
     // A stippled cast shadow gives the masonry a solid footing without drawing terrain objects.
-    const baseY = g.oy + this.tower.height * .089;
+    const baseY = g.oy + this.tower.height * .23;
     const sw = this.tower.width * .72;
     const sh = this.tower.height * .14;
     ctx.font = `9px ${FONT}`;
@@ -266,8 +266,8 @@ export class Field {
     if (this.cachedCircle && this.cachedCircle.range === range) return this.cachedCircle;
     const image = surface(this.w, this.h, this.ratio);
     const { ctx } = image;
-    const { rx, ry } = this.geometry;
-    const count = Math.round(Math.PI * (rx + ry) * range / 32 / 6.4);
+    const { sx, sy } = this.geometry;
+    const count = Math.max(24, Math.round(Math.PI * (sx + sy) * range / 5));
     ctx.fillStyle = this.colors.accent;
     ctx.textAlign = 'center';
     ctx.font = `600 11px ${FONT}`;
@@ -292,40 +292,82 @@ export class Field {
     this.ctx.drawImage(image.canvas, x, y, image.canvas.width / this.ratio, image.canvas.height / this.ratio);
   }
 
+  enemySprite(enemy) {
+    const tier = clamp(enemy.tier || 1, 1, 4);
+    const key = `${enemy.type}-${tier}-${Boolean(enemy.elite)}-${Boolean(enemy.mini)}-${Boolean(enemy.boss)}`;
+    if (this.enemySprites.has(key)) return this.enemySprites.get(key);
+    const rows = ENEMY_ART[enemy.type];
+    if (!rows) return null;
+    let scale = 1 + .075 * (tier - 1);
+    if (enemy.elite) scale += .10;
+    if (enemy.mini) scale = .70;
+    if (enemy.boss) scale = 1.62;
+    const sprite = makeSprite(rows, this.enemyLine * scale, this.ratio, this.colors);
+    this.enemySprites.set(key, sprite);
+    return sprite;
+  }
+
   paintEnemy(enemy, p, now) {
-    const sprite = this.enemySprites[enemy.type];
+    const sprite = this.enemySprite(enemy);
     if (!sprite) return;
     const { ctx, colors } = this;
     const seed = Number.parseInt(String(enemy.id).replace(/\D/g, ''), 10) || 0;
-    const floating = enemy.type === 'moth' || enemy.type === 'wraith';
-    const bob = Math.sin(now * (floating ? 3.6 : 5) + seed * 2.1) * (floating ? 1.7 : .55);
+    const floating = ['moth', 'wraith', 'cantor'].includes(enemy.type);
+    const bob = Math.sin(now * (floating ? 3.6 : 5) + seed * 2.1) * (floating ? 1.35 : .45);
     const x = Math.round(p.x - sprite.width / 2);
     const y = Math.round(p.y - sprite.height / 2 + bob);
+    const half = sprite.width * .5;
+    const focused = this.game.focusId === enemy.id;
+    const active = focused || this.game.selected === enemy.id || this.hover === enemy.id || this.keyTarget === enemy.id;
     this.paintImage(sprite, x, y);
     this.hitList.push({ x, y, sprite, id: enemy.id });
-    const active = this.game.selected === enemy.id || this.hover === enemy.id || this.keyTarget === enemy.id;
     ctx.fillStyle = colors.accent;
-    if (active) {
-      ctx.font = `12px ${FONT}`;
-      ctx.fillText('[', x - 8, p.y);
-      ctx.fillText(']', x + sprite.width + 1, p.y);
+    ctx.textAlign = 'center';
+    if (enemy.shield > 0) {
+      ctx.globalAlpha = .68 + .2 * Math.sin(now * 2.7 + seed);
+      ctx.font = `bold ${Math.min(19, sprite.height * .5)}px ${FONT}`;
+      ctx.fillText('(', p.x - half - 2, p.y);
+      ctx.fillText(')', p.x + half + 2, p.y);
+      ctx.globalAlpha = 1;
     }
-    if (active || enemy.hp < enemy.maxHp) {
-      const n = 5;
+    if (active) {
+      ctx.font = `11px ${FONT}`;
+      const offset = half + (enemy.shield > 0 ? 8 : 3);
+      ctx.fillText(focused ? '>' : '[', p.x - offset, p.y);
+      ctx.fillText(focused ? '<' : ']', p.x + offset, p.y);
+    }
+    ctx.font = `bold 9px ${FONT}`;
+    if (enemy.boss) {
+      ctx.fillText('[ SOVEREIGN ]', clamp(p.x, 38, this.w - 38), Math.max(6, y - 5));
+    } else if (active) {
+      const label = (enemy.elite ? '! ' : '') + 'T' + (enemy.tier || 1);
+      ctx.fillText(label, p.x, y - 5);
+    } else if (enemy.elite) {
+      ctx.fillText('!', p.x + half - 1, y);
+    }
+    if (enemy.burnUntil > this.game.time || enemy.slowUntil > this.game.time) {
+      const burning = enemy.burnUntil > this.game.time;
+      ctx.fillText(burning ? '^^' : '~', p.x + (active || enemy.boss ? half + 2 : 0), y - 4);
+    }
+    if (enemy.boss || active || enemy.hp < enemy.maxHp) {
+      const n = enemy.boss ? 12 : 5;
       const full = clamp(Math.ceil(n * enemy.hp / enemy.maxHp), 0, n);
-      ctx.font = `bold 7px ${FONT}`;
+      const font = enemy.boss ? 8 : 7;
+      ctx.font = `bold ${font}px ${FONT}`;
+      ctx.textAlign = 'left';
+      const left = p.x - n * font * .3;
       ctx.fillStyle = colors.muted;
-      const left = p.x - n * 2.1;
       ctx.fillText('-'.repeat(n), left, y + sprite.height + 3);
       ctx.fillStyle = colors.accent;
       ctx.fillText('='.repeat(full), left, y + sprite.height + 3);
     }
+    ctx.textAlign = 'left';
   }
 
   paintTower() {
     const { ctx, tower, geometry: g } = this;
     const x = Math.round(g.ox - tower.width / 2);
-    const y = Math.round(g.oy - tower.height * .87);
+    const y = Math.round(g.oy - tower.height * TOWER_ANCHOR);
     this.paintImage(tower, x, y);
     this.hitList.push({ x, y, sprite: tower, id: 'tower' });
     if (this.game.selected === 'tower' || this.hover === 'tower' || this.keyTarget === 'tower') {
@@ -339,42 +381,131 @@ export class Field {
 
   paintShots() {
     const { ctx, colors, game, geometry: g } = this;
-    const start = { x: g.ox, y: g.oy - this.tower.height * .30 };
+    const muzzle = { x: g.ox, y: g.oy - this.tower.height * .31 };
     ctx.textAlign = 'center';
     for (const shot of game.shots) {
-      const p = this.project(shot.x, shot.y);
-      const dx = p.x - start.x;
-      const dy = p.y - start.y;
-      const n = Math.max(1, Math.round(Math.hypot(dx, dy) / 6.6));
+      const chain = shot.kind === 'chain';
+      const crit = shot.kind === 'crit';
+      const twin = shot.kind === 'twin';
+      const start = Number.isFinite(shot.fromX) && Number.isFinite(shot.fromY) ? this.project(shot.fromX, shot.fromY) : muzzle;
+      const end = this.project(shot.x, shot.y);
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
+      const distance = Math.max(1, Math.hypot(dx, dy));
+      const count = Math.ceil(distance / (chain ? 4.5 : 6));
       const slope = Math.abs(dy / (dx || .01));
-      const char = slope < .28 ? '-' : slope > 2.4 ? '|' : dx * dy < 0 ? '/' : '\\';
-      ctx.fillStyle = colors.accent;
-      ctx.font = `bold 8px ${FONT}`;
-      for (let i = 1; i < n; i++) {
-        const f = i / n;
-        ctx.globalAlpha = clamp(shot.life / shot.maxLife, 0, 1) * (.35 + .65 * f);
-        ctx.fillText(i % 4 === 0 ? '.' : char, start.x + dx * f, start.y + dy * f);
+      const line = slope < .28 ? '-' : slope > 2.4 ? '|' : dx * dy < 0 ? '/' : '\\';
+      const fade = clamp(shot.life / shot.maxLife, 0, 1);
+      ctx.fillStyle = chain || crit ? colors.ink : colors.accent;
+      ctx.font = `bold ${crit ? 10 : 8}px ${FONT}`;
+      for (let i = 1; i < count; i++) {
+        const f = i / count;
+        const offset = chain ? Math.sin(i * 1.75) * 3.8 : 0;
+        const x = start.x + dx * f - dy / distance * offset;
+        const y = start.y + dy * f + dx / distance * offset;
+        ctx.globalAlpha = fade * (.3 + .7 * f);
+        let glyph = i % 4 === 0 ? '.' : line;
+        if (chain) glyph = i % 3 === 0 ? '+' : '~';
+        if (crit && line === '-') glyph = '=';
+        ctx.fillText(glyph, x, y);
+        if (twin) ctx.fillText(glyph, x - dy / distance * 3, y + dx / distance * 3);
       }
-      ctx.globalAlpha = clamp(.23 + shot.life / shot.maxLife, 0, 1);
-      ctx.font = `bold 13px ${FONT}`;
-      ctx.fillText('*', p.x, p.y);
+      ctx.globalAlpha = fade;
+      ctx.font = `bold ${crit ? 16 : 12}px ${FONT}`;
+      ctx.fillText(chain ? '+' : '*', end.x, end.y);
     }
-    for (const fx of game.effects || []) {
-      const p = this.project(fx.x, fx.y);
-      const life = clamp(fx.life / fx.maxLife, 0, 1);
-      const splash = fx.type === 'splash';
-      const radius = splash ? (fx.radius || 6) * g.rx / 32 : 11;
-      const r = (1.12 - life) * radius;
-      const count = splash ? 18 : 6;
-      ctx.globalAlpha = life * .87;
-      ctx.fillStyle = fx.type === 'kill' ? colors.ink : colors.accent;
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'left';
+  }
+
+  burst(point, radiusX, radiusY, count, glyphs, angle = 0) {
+    for (let i = 0; i < count; i++) {
+      const theta = angle + TAU * i / count;
+      this.ctx.fillText(glyphs[i % glyphs.length], point.x + radiusX * Math.cos(theta), point.y + radiusY * Math.sin(theta));
+    }
+  }
+
+  paintEffects() {
+    const { ctx, game, colors, geometry: g } = this;
+    ctx.textAlign = 'center';
+    for (const effect of game.effects) {
+      const p = this.project(effect.x, effect.y);
+      const life = clamp(effect.life / effect.maxLife, 0, 1);
+      const phase = 1 - life;
+      const radius = Math.max(1, effect.radius || 1);
+      const rx = g.sx * radius;
+      const ry = g.sy * radius;
+      ctx.globalAlpha = Math.min(1, life * 1.55);
+      ctx.fillStyle = colors.accent;
       ctx.font = `bold 10px ${FONT}`;
-      for (let i = 0; i < count; i++) {
-        const a = TAU * i / count;
-        ctx.fillText(i % 3 === 0 ? '+' : '.', p.x + r * Math.cos(a), p.y + r * .65 * Math.sin(a));
+      switch (effect.type) {
+        case 'splash':
+        case 'pulse':
+        case 'ward': {
+          const pulse = effect.type === 'pulse';
+          const size = .12 + .88 * Math.sqrt(phase);
+          const count = clamp(Math.ceil((rx + ry) * .45), 12, 76);
+          this.burst(p, rx * size, ry * size, count, pulse ? '+.:-' : effect.type === 'ward' ? '|:.' : '+..');
+          if (pulse) {
+            ctx.globalAlpha *= .45;
+            this.burst(p, rx * size * .83, ry * size * .83, count, '..-');
+          }
+          break;
+        }
+        case 'heal':
+          for (let i = 0; i < 3; i++) ctx.fillText('+', p.x + (i - 1) * 7, p.y - 3 - phase * 14 - (i % 2) * 6);
+          break;
+        case 'shield':
+          ctx.fillText('((', p.x - 9 - phase * 7, p.y);
+          ctx.fillText('))', p.x + 9 + phase * 7, p.y);
+          break;
+        case 'split':
+          ctx.fillText('<:', p.x - 4 - phase * 13, p.y + phase * 5);
+          ctx.fillText(':>', p.x + 4 + phase * 13, p.y - phase * 5);
+          break;
+        case 'burn':
+          ctx.fillText('^.^', p.x, p.y - 7 - phase * 7);
+          break;
+        case 'crit':
+          ctx.fillText('*!', p.x + 7, p.y - 8 - phase * 9);
+          break;
+        case 'boss':
+        case 'bossfall': {
+          const fallen = effect.type === 'bossfall';
+          const size = fallen ? .25 + phase : 1 - phase * .75;
+          this.burst(p, rx * size, ry * size, 26, fallen ? '*/+.' : '><..', phase * .4);
+          ctx.fillStyle = colors.ink;
+          if (fallen) {
+            this.burst(p, rx * phase * .67, ry * phase * .67, 15, '+.:');
+            ctx.fillText('[ CORE SHATTERED ]', clamp(p.x, 49, this.w - 49), Math.max(7, p.y - 11 - phase * 12));
+          }
+          break;
+        }
+        default: {
+          const dead = effect.type === 'kill';
+          ctx.fillStyle = dead ? colors.ink : colors.accent;
+          this.burst(p, Math.max(12, rx) * phase, Math.max(9, ry) * phase, dead ? 7 : 5, dead ? '+./:*' : '*.', .41);
+        }
       }
     }
     ctx.globalAlpha = 1;
+    ctx.textAlign = 'left';
+  }
+
+  paintWarning() {
+    const warning = this.game.warning;
+    if (!warning) return;
+    const p = this.project(warning.x, warning.y);
+    const { ctx, colors } = this;
+    const remaining = String(Math.max(0, Math.ceil(warning.at - this.game.time))).padStart(2, '0');
+    const offset = 9 + Math.sin(this.game.time * 4) * 3;
+    ctx.font = `bold 10px ${FONT}`;
+    ctx.fillStyle = colors.accent;
+    ctx.textAlign = 'center';
+    ctx.fillText('>>', p.x - offset, p.y);
+    ctx.fillText('<<', p.x + offset, p.y);
+    const top = p.y < this.h / 2;
+    ctx.fillText(`[ BOSS ${remaining}s ]`, clamp(p.x, 40, this.w - 40), p.y + (top ? 13 : -13));
     ctx.textAlign = 'left';
   }
 
@@ -389,7 +520,7 @@ export class Field {
     const entries = game.enemies.map(enemy => ({ enemy, p: this.project(enemy.x, enemy.y) })).sort((a, b) => a.p.y - b.p.y);
     let towerDrawn = false;
     for (const { enemy, p } of entries) {
-      if (!towerDrawn && p.y >= this.geometry.oy + this.tower.height * .06) {
+      if (!towerDrawn && p.y >= this.geometry.oy + this.tower.height * .20) {
         this.paintTower();
         towerDrawn = true;
       }
@@ -397,5 +528,8 @@ export class Field {
     }
     if (!towerDrawn) this.paintTower();
     this.paintShots();
+    this.paintEffects();
+    this.paintWarning();
+    if (this.localPointer) this.hover = this.hitTest(this.localPointer);
   }
 }
