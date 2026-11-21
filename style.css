@@ -233,7 +233,7 @@ dialog::backdrop { background:#000c; }
 
 /* Combat HUD */
 .field-tray { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(185px,1fr); position:relative; min-width:0; padding-top:4px; }
-.field-tray::before { content:var(--rule) / ''; position:absolute; top:0; left:0; right:0; overflow:hidden; font:12px/8px var(--mono); letter-spacing:-1px; color:var(--line); }
+.field-tray::before { content:var(--rule) / ''; white-space:nowrap; height:8px; position:absolute; top:0; left:0; right:0; overflow:hidden; font:12px/8px var(--mono); letter-spacing:-1px; color:var(--line); }
 .field-tray .feed::before { content:none; }
 .relic-rack { min-width:0; position:relative; padding:15px 18px 12px; }
 .relic-rack::before { content:'|\A|\A|\A|\A|\A|\A|\A|\A|\A|' / ''; white-space:pre; position:absolute; left:0; top:10px; bottom:10px; overflow:hidden; font:12px/9px var(--mono); color:var(--line); }

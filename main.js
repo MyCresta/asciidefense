@@ -188,7 +188,7 @@ function renderInspector() {
   const type = enemy && ENEMIES[enemy.type];
   const flags = enemy && [enemy.shield > 0 ? 'Shield ' + Math.ceil(enemy.shield) : '', enemy.burnUntil > game.time ? 'Burning' : '', enemy.slowUntil > game.time ? 'Slowed' : ''].filter(Boolean);
   const stats = enemy
-    ? [['Integrity', Math.ceil(enemy.hp) + '/' + Math.ceil(enemy.maxHp)], ['Impact', enemy.damage + ' HP'], ['Trait', flags.join(' / ') || type.trait], ['Bounty', '$' + enemy.reward]]
+    ? [['Integrity', Math.ceil(enemy.hp) + '/' + Math.ceil(enemy.maxHp)], ['Impact', enemy.damage + ' HP'], [flags.length ? 'Status' : 'Speed', flags.length ? flags.join(' / ') : concise(enemy.speed) + ' u/s'], ['Bounty', '$' + enemy.reward]]
     : [['Damage', concise(game.damage) + ' HP'], ['Range', concise(game.range) + ' u'], ['Fire rate', game.rate.toFixed(2) + '/s'], ['Splash', game.splash ? concise(game.splash) + ' u' : 'Off']];
   const signature = [enemy?.id || 'tower', enemy?.tier, game.doctrine, game.focusId, JSON.stringify(stats)].join('/');
   if (signature === inspectedSnapshot) return;
@@ -199,6 +199,7 @@ function renderInspector() {
   setText($('entity-type'), enemy ? 'Tier ' + tierName(enemy.tier) + ' / ' + type.trait : DOCTRINES[game.doctrine].name + ' tower');
   $('entity-type').title = type?.description || 'Prioritizes the closest hostile in range.';
   setText($('inspect-action'), enemy ? game.focusId === enemy.id ? '[ Release ]' : '[ Focus fire ]' : '[ Build ]');
+  $('inspect-action').setAttribute('aria-haspopup', enemy ? 'false' : 'dialog');
   $('inspect-action').setAttribute('aria-label', enemy ? game.focusId === enemy.id ? 'Release focus fire' : 'Focus fire on ' + type.name : 'Inspect tower build');
   drawStats($('entity-stats'),stats,true);
 }
