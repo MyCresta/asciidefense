@@ -1,0 +1,64 @@
+/* Art styles change the interface as well as the battlefield. */
+@font-face {
+  font-family: "Pixelify Sans";
+  src: url("./fonts/pixelify-sans.woff2") format("woff2");
+  font-weight: 400 700;
+  font-display: swap;
+}
+
+/* ---------- Pixel ---------- */
+:root[data-art=pixel] {
+  --ascii-mono: "DejaVu Sans Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --mono: "Pixelify Sans", var(--ascii-mono);
+  --step: polygon(0 4px, 2px 4px, 2px 2px, 4px 2px, 4px 0, calc(100% - 4px) 0, calc(100% - 4px) 2px, calc(100% - 2px) 2px, calc(100% - 2px) 4px, 100% 4px, 100% calc(100% - 4px), calc(100% - 2px) calc(100% - 4px), calc(100% - 2px) calc(100% - 2px), calc(100% - 4px) calc(100% - 2px), calc(100% - 4px) 100%, 4px 100%, 4px calc(100% - 2px), 2px calc(100% - 2px), 2px calc(100% - 4px), 0 calc(100% - 4px));
+}
+/* ASCII art keeps its monospace grid underneath, so redrawn art lines up. */
+:root[data-art=pixel] pre { font-family: var(--ascii-mono); }
+
+/* Glyph art (wordmark, workshop icons) is replaced by its pixel image in the same box. */
+:root[data-art=pixel] .glyph-art {
+  color: transparent !important; text-shadow: none !important;
+  background: var(--glyph-image) var(--glyph-position) / var(--glyph-size) no-repeat;
+  image-rendering: pixelated;
+}
+
+/* Frames: a solid two-pixel border with stepped corners. */
+:root[data-art=pixel] .frame { clip-path: var(--step); }
+:root[data-art=pixel] .frame-art { border: 2px solid var(--line); clip-path: var(--step); }
+:root[data-art=pixel] .frame-art > * { display: none; }
+
+/* Rules become dashed pixel lines. */
+:root[data-art=pixel] :is(.feed, .upgrade-row + .upgrade-row, .record-body h3, .field-tray)::before {
+  content: ''; height: 2px;
+  background: repeating-linear-gradient(90deg, var(--line) 0 4px, transparent 4px 8px);
+}
+:root[data-art=pixel] .upgrade-row + .upgrade-row::before { background: repeating-linear-gradient(90deg, var(--faint) 0 4px, transparent 4px 8px); }
+:root[data-art=pixel] :is(.metric + .metric, .relic-rack)::before {
+  content: ''; width: 2px;
+  background: repeating-linear-gradient(180deg, var(--line) 0 4px, transparent 4px 8px);
+}
+:root[data-art=pixel] .metric + .metric::before { height: 34px; }
+
+/* Buttons drop their brackets for a pixel box. */
+:root[data-art=pixel] .button-bracket { display: none; }
+:root[data-art=pixel] .controls button {
+  padding: 4px 8px; background: var(--surface);
+  box-shadow: inset 0 0 0 2px var(--line); clip-path: var(--step);
+}
+:root[data-art=pixel] .controls button:is(:hover, :focus-visible) { box-shadow: inset 0 0 0 2px var(--accent); }
+:root[data-art=pixel] .speed-button::before, :root[data-art=pixel] .speed-button::after { content: none; }
+:root[data-art=pixel] .speed-button { padding: 1px 5px; }
+:root[data-art=pixel] .speed-button[aria-pressed=true] { background: var(--accent); color: var(--bg); clip-path: var(--step); }
+
+/* Canvas text and the cursor follow the pixel font too. */
+:root[data-art=pixel] #ascii-cursor { font-family: var(--ascii-mono); }
+
+/* ---------- Swap animation ----------
+   The new interface is revealed outward from the Spire, in step with the battlefield.
+   The battlefield canvases stay live through the swap, so the game never freezes. */
+::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+#field { view-transition-name: art-field; }
+.field-swap { view-transition-name: art-field-swap; }
+::view-transition-group(art-field), ::view-transition-group(art-field-swap) { animation: none; }
+::view-transition-old(art-field), ::view-transition-old(art-field-swap) { display: none; }
+::view-transition-new(art-field), ::view-transition-new(art-field-swap) { animation: none; }

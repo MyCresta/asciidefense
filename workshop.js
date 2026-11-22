@@ -1,7 +1,7 @@
-import { UPGRADES } from './content.js?v=3.7.0';
-import { cost as relicCost } from './relic-effects.js?v=3.7.0';
-import { CURSES, applyCurse, cursed } from './hazards.js?v=3.7.0';
-import { WEAPONS, MAX_GRADE, GRADE_NAMES, TRAITS, availableWeapons, rollWeapon, receiveWeapon, replaceWeapon, forgePrice, mountTitle } from './weapons.js?v=3.7.0';
+import { UPGRADES } from './content.js?v=3.8.0';
+import { cost as relicCost } from './relic-effects.js?v=3.8.0';
+import { CURSES, applyCurse, cursed } from './hazards.js?v=3.8.0';
+import { WEAPONS, MAX_GRADE, GRADE_NAMES, TRAITS, availableWeapons, rollWeapon, receiveWeapon, replaceWeapon, forgePrice, mountTitle } from './weapons.js?v=3.8.0';
 
 const GRADES = ['Standard', 'Refined', 'Masterwork'];
 const RESERVES = new Set(['scrap', 'prospect']);

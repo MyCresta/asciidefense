@@ -1,5 +1,5 @@
-import { AsciiStyle } from './ascii-style.js?v=3.7.0';
-import { PixelStyle } from './pixel-style.js?v=3.7.0';
+import { AsciiStyle } from './ascii-style.js?v=3.8.0';
+import { PixelStyle } from './pixel-style.js?v=3.8.0';
 
 const HALF_WORLD_WIDTH = 140;
 const HALF_WORLD_HEIGHT = 84;
@@ -144,9 +144,16 @@ export class Field {
 
   get busy() { return Boolean(this.swap); }
 
+  // The Spire's position in the viewport, where a style swap starts.
+  screenPoint() {
+    if (!this.geometry) return null;
+    const rect = this.canvas.getBoundingClientRect();
+    return { x: rect.left + this.geometry.ox, y: rect.top + this.geometry.oy };
+  }
+
   // Swap the art style live. Both styles paint the same frame while the new one
   // is revealed outward from the Spire, so the game never stops.
-  setStyle(key, animate = true) {
+  setStyle(key, animate = true, reach = 0) {
     const Style = ART_STYLES.find(item => item.key === key) || AsciiStyle;
     if (this.swap) this.finishSwap();
     if (this.style.constructor === Style) return;
@@ -158,7 +165,7 @@ export class Field {
     }
     const layer = this.swapLayer();
     layer.hidden = false;
-    this.swap = { style: incoming, start: performance.now(), fade: REDUCED_MOTION.matches };
+    this.swap = { style: incoming, start: performance.now(), fade: REDUCED_MOTION.matches, reach };
     this.styleKey = Style.key;
   }
 
@@ -226,7 +233,7 @@ export class Field {
       if (swap.fade) layer.style.opacity = String(t);
       else {
         const { ox, oy } = this.geometry;
-        const reach = Math.hypot(Math.max(ox, this.w - ox), Math.max(oy, this.h - oy)) + 30;
+        const reach = swap.reach || Math.hypot(Math.max(ox, this.w - ox), Math.max(oy, this.h - oy)) + 30;
         const eased = t < .5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
         const radius = eased * reach;
         const mask = `radial-gradient(circle at ${ox}px ${oy}px, #000 ${Math.max(0, radius - 18)}px, transparent ${radius}px)`;

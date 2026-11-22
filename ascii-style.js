@@ -1,6 +1,6 @@
-import { TOWER, TOWER_SMALL, ENEMY_ART } from './art.js?v=3.7.0';
-import { ELITE_TRAITS } from './hazards.js?v=3.7.0';
-import { maxWeaponRange } from './weapons.js?v=3.7.0';
+import { TOWER, TOWER_SMALL, ENEMY_ART } from './art.js?v=3.8.0';
+import { ELITE_TRAITS } from './hazards.js?v=3.8.0';
+import { maxWeaponRange } from './weapons.js?v=3.8.0';
 
 export const FONT = '"Lucida Console", "Liberation Mono", "Courier New", monospace';
 const TAU = Math.PI * 2;

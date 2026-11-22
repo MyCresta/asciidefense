@@ -1,8 +1,8 @@
-import { AsciiStyle, surface } from './ascii-style.js?v=3.7.0';
-import { PIXEL_ENEMIES, pixelSpire, pixelPalette, paintPixels } from './pixel-art.js?v=3.7.0';
+import { AsciiStyle, surface } from './ascii-style.js?v=3.8.0';
+import { PIXEL_ENEMIES, pixelSpire, pixelPalette, paintPixels } from './pixel-art.js?v=3.8.0';
 
 // Each symbol the ASCII style prints becomes a 3x3 block of pixels in the same cell.
-const GLYPHS = {
+export const GLYPHS = {
   '.': '.......x.', ',': '....x.x..', "'": '.x.......', '`': '.x.......',
   ':': '.x.....x.', ';': '.x.....x.', '+': '.x.xxx.x.', '*': 'x.x.x.x.x',
   'x': 'x.x.x.x.x', '-': '...xxx...', '=': 'xxx...xxx', '|': '.x..x..x.',
@@ -11,7 +11,7 @@ const GLYPHS = {
   '<': '..x.x...x', '>': 'x...x.x..', '[': 'xx.x..xx.', ']': '.xx..x.xx',
   '^': '.x.x.x...', 'v': '...x.x.x.', '!': '.x..x....', 'o': '.x.x.x.x.',
 };
-const FALLBACK = '....x....';
+export const FALLBACK = '....x....';
 
 // The pixel art style. It inherits every placement from the ASCII style and only
 // changes how sprites and symbols are drawn, so the two line up exactly.
@@ -19,7 +19,17 @@ export class PixelStyle extends AsciiStyle {
   static key = 'pixel';
   static label = 'Pixel';
 
+  // Words on the battlefield use the pixel font; symbols are drawn as pixels by mark().
+  font(size, weight = 'bold') {
+    this.markSize = size;
+    this.ctx.font = `${weight === 400 ? 400 : 600} ${Math.round(size * 1.2)}px "Pixelify Sans", monospace`;
+  }
+
   prepare() {
+    if (!this.fontRequested) {
+      this.fontRequested = true;
+      document.fonts?.load('16px "Pixelify Sans"').then(() => { this.stale = true; }, () => {});
+    }
     this.palette = pixelPalette(this.colors);
     this.spires = new Map();
     super.prepare();
