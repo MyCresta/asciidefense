@@ -3,6 +3,7 @@
 //
 // Tones follow the active theme:
 //   . clear   o outline   d shadow   m body   l light   h highlight   a accent   g accent glint
+//   b paper (hides the range ring behind solid parts)
 // A row as wide as half the sprite plus one column is mirrored around its last column.
 
 export const PIXEL_TONES = 'odmlhag';
@@ -145,6 +146,78 @@ export const PIXEL_ENEMIES = {
   ]),
 };
 
+// The Spire is a ring node: an outer ring with side pylons on a crossbar, an inner
+// ring, two accent spikes and a glowing core. It is drawn from shapes measured in
+// the ASCII art's own glyph grid, so each part sits over the glyphs it replaces.
+// Units: one line of ASCII is 1 tall and one glyph is .624 wide.
+const GLYPH = .624;
+const SPIRE_SHAPES = {
+  large: { rx: 6.24, ry: 5, ring: .6, inner: [3.12, 2.5], spike: [3.4, .85, 1.2], core: [.95, .78], housing: [1.95, 1.25] },
+  small: { rx: 3.74, ry: 3, ring: .55, inner: null, spike: [2.05, .6, .75], core: [.8, .62], housing: [1.6, 1.05] },
+};
+
+export function pixelSpire(columns, lines, size = columns > 20 ? 'large' : 'small') {
+  const s = SPIRE_SHAPES[size];
+  let width = Math.round(columns * GLYPH * 3);
+  if (width % 2 === 0) width++;
+  const height = lines * 3;
+  const halfX = columns * GLYPH / 2, halfY = lines / 2;
+  const rows = [];
+  for (let j = 0; j < height; j++) {
+    let row = '';
+    for (let i = 0; i < width; i++) {
+      const x = ((i + .5) / width - .5) * 2 * halfX;
+      const y = ((j + .5) / height - .5) * 2 * halfY;
+      const px = 2 * halfX / width, py = 2 * halfY / height;
+      const lit = (-x / s.rx - y / s.ry) * Math.SQRT1_2; // light from the upper left
+      const shade = lit > .35 ? 'l' : lit < -.35 ? 'd' : 'm';
+      let tone = '.';
+      // Distance from the outer ring, in line units, measured along its normal.
+      const e = Math.hypot(x / s.rx, y / s.ry);
+      const ringGap = (e - 1) * Math.min(s.rx, s.ry);
+      if (e < 1) tone = 'b';
+      if (Math.abs(y) < s.ry && Math.abs(x) < .16) tone = 'b';
+      // Stems above and below the ring.
+      if (Math.abs(x) < Math.max(.17, px * .6) && Math.abs(y) >= s.ry - .1 && Math.abs(y) < halfY) tone = 'm';
+      // Crossbar from the ring out to the box edges, and the connectors inside.
+      if (Math.abs(y) < .3 && Math.abs(x) > (s.inner ? s.inner[0] : s.housing[0])) tone = y < -.1 ? 'l' : y > .1 ? 'd' : 'm';
+      if (Math.abs(ringGap) < s.ring / 2) tone = ringGap > s.ring / 2 - Math.max(px, py) ? 'o' : ringGap < -s.ring / 2 + Math.max(px, py) ? 'd' : shade;
+      if (s.inner) {
+        const inner = Math.hypot(x / s.inner[0], y / s.inner[1]);
+        if (Math.abs(inner - 1) * s.inner[1] < .13 && Math.abs(y) > .35) tone = lit > 0 ? 'm' : 'd';
+      }
+      // Pylons where the crossbar meets the ring: the side weapons sit here.
+      for (const side of [-1, 1]) {
+        const dx = Math.abs(x - side * s.rx), dy = Math.abs(y);
+        if (dx < .62 && dy < .78) tone = dx > .62 - px || dy > .78 - py ? 'o' : dx < .25 && dy < .3 ? 'h' : 'l';
+      }
+      // Stem caps.
+      for (const side of [-1, 1]) {
+        if (Math.abs(x) < .38 && Math.abs(y - side * s.ry) < .28) tone = 'h';
+      }
+      // Accent spikes above and below the core.
+      const [sy, sw, sh] = s.spike;
+      for (const side of [-1, 1]) {
+        const d = Math.abs(x) / sw + Math.abs(y - side * sy) / sh;
+        if (d < 1) tone = d < .4 ? 'g' : d > .78 ? 'o' : 'a';
+      }
+      // Housing and core.
+      const [hx, hy] = s.housing;
+      if (Math.abs(x) < hx && Math.abs(y) < hy) {
+        const edge = Math.abs(x) > hx - px * 1.2 || Math.abs(y) > hy - py * 1.2;
+        const round = Math.hypot(x / hx, y / hy) < 1.22;
+        if (round) tone = edge ? 'm' : 'd';
+      }
+      const [cx, cy] = s.core;
+      const c = Math.hypot(x / cx, y / cy);
+      if (c < 1) tone = c > .72 ? 'a' : Math.hypot(x / cx + .32, y / cy + .32) < .3 ? 'h' : 'g';
+      row += tone;
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
 const parsed = new Map();
 function rgb(color) {
   if (parsed.has(color)) return parsed.get(color);
@@ -173,6 +246,7 @@ export function pixelPalette(colors) {
     h: colors.ink,
     a: colors.accent,
     g: mix(colors.accent, colors.ink, .55),
+    b: colors.bg,
   };
 }
 
