@@ -389,7 +389,7 @@ dialog::backdrop { background:#000c; }
 @media (min-width:701px) and (max-height:1000px) { .service-row .upgrade-icon { font-size:6.5px; } .upgrade-list .upgrade-copy { gap:2px; } }
 .hardpoint-row .cost { font-family:var(--mono); letter-spacing:-.04em; }
 div.hardpoint-row .cost { color:var(--ink); }
-div.hardpoint-row.vacant :is(.upgrade-name,.upgrade-icon,.cost) { color:var(--muted); }
+.hardpoint-row.vacant :is(.upgrade-name,.upgrade-icon,.cost) { color:var(--muted); }
 .workshop-divider { flex:none; padding:3px 0 1px; color:var(--muted); font-size:.6rem; letter-spacing:.14em; }
 .workshop-divider + .upgrade-row::before { display:none; }
 

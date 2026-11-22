@@ -1,16 +1,16 @@
-import { SPEEDS, SimulationClock } from './clock.js?v=3.4.0';
-import { initAppearance } from './appearance.js?v=3.4.0';
-import { workbench } from './workbench-ui.js?v=3.4.0';
-import { pickBlueprint, fitChoices, workshopCosts } from './workshop.js?v=3.4.0';
-import { maxWeaponRange, mountStats, mountTitle, WEAPON_COMBOS, weaponComboActive } from './weapons.js?v=3.4.0';
-import { Game, formatTime } from './engine.js?v=3.4.0';
-import { ELITE_TRAITS, ROUTES, chooseRoute, CURSES } from './hazards.js?v=3.4.0';
-import { ENEMIES, POWERS, RUN_PROFILES, SYNERGIES, UPGRADES } from './content.js?v=3.4.0';
-import { TITLE, PORTRAIT, ENEMY_PORTRAITS } from './art.js?v=3.4.0';
-import { Field } from './field.js?v=3.4.0';
-import { saveCheckpoint } from './checkpoint.js?v=3.4.0';
-import { runPanels } from './run-panels.js?v=3.4.0';
-import { $, pad, decorateFrame, drawStats, element, setText, tierName } from './ui.js?v=3.4.0';
+import { SPEEDS, SimulationClock } from './clock.js?v=3.5.0';
+import { initAppearance } from './appearance.js?v=3.5.0';
+import { workbench } from './workbench-ui.js?v=3.5.0';
+import { pickBlueprint, fitChoices, workshopCosts } from './workshop.js?v=3.5.0';
+import { maxWeaponRange, mountStats, mountTitle, WEAPON_COMBOS, weaponComboActive } from './weapons.js?v=3.5.0';
+import { Game, formatTime } from './engine.js?v=3.5.0';
+import { ELITE_TRAITS, ROUTES, chooseRoute, CURSES } from './hazards.js?v=3.5.0';
+import { ENEMIES, POWERS, RUN_PROFILES, SYNERGIES, UPGRADES } from './content.js?v=3.5.0';
+import { TITLE, PORTRAIT, ENEMY_PORTRAITS } from './art.js?v=3.5.0';
+import { Field } from './field.js?v=3.5.0';
+import { saveCheckpoint } from './checkpoint.js?v=3.5.0';
+import { runPanels } from './run-panels.js?v=3.5.0';
+import { $, pad, decorateFrame, drawStats, element, setText, tierName } from './ui.js?v=3.5.0';
 
 const root = document.documentElement;
 function preference(key, fallback) {
@@ -244,8 +244,8 @@ $('route-1').addEventListener('click', () => pickRoute(1));
 const TIPS = [
   ['focus', () => game.time > 2, 'Click an enemy to focus fire on it.'],
   ['pause', () => game.time > 25, 'Space pauses and resumes.'],
-  ['cache', () => game.workshop.caches > 0 && game.time > 8, 'Press C to open a salvage cache.'],
-  ['hardpoint', () => game.armory.slots < 3 && game.scrap >= workshopCosts(game).hardpoint, 'Buy a hardpoint to get another weapon.'],
+  ['cache', () => game.workshop.caches > 0 && game.time > 8, 'Press C to open a big cache.'],
+  ['forge', () => game.scrap >= workshopCosts(game).forge[0], 'Click a weapon to forge it a grade higher.'],
   ['route', () => Boolean(game.route), 'Press 1 or 2 to choose a route.']
 ];
 let tipsSeen = new Set(preference('tips', '').split(',').filter(Boolean));

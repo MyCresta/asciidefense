@@ -1,10 +1,10 @@
-import { WEAPONS, WEAPON_COMBOS, mountTitle } from './weapons.js?v=3.4.0';
-import { PERKS, buyPerk, perkBank, readPerks } from './perks.js?v=3.4.0';
-import { workshopCosts, describeBlueprint, rerollCache, closeCache, fitChoices, cancelFit } from './workshop.js?v=3.4.0';
-import { BLUEPRINTS, ENEMIES, RUN_PROFILES, POWERS, SYNERGIES, UPGRADES } from './content.js?v=3.4.0';
-import { ENEMY_PORTRAITS } from './art.js?v=3.4.0';
-import { formatTime } from './engine.js?v=3.4.0';
-import { $, decorateFrame, drawStats, element, pad, setText, tierName } from './ui.js?v=3.4.0';
+import { WEAPONS, WEAPON_COMBOS, mountTitle } from './weapons.js?v=3.5.0';
+import { PERKS, buyPerk, perkBank, readPerks } from './perks.js?v=3.5.0';
+import { workshopCosts, describeBlueprint, rerollCache, closeCache, fitChoices, cancelFit } from './workshop.js?v=3.5.0';
+import { BLUEPRINTS, ENEMIES, RUN_PROFILES, POWERS, SYNERGIES, UPGRADES } from './content.js?v=3.5.0';
+import { ENEMY_PORTRAITS } from './art.js?v=3.5.0';
+import { formatTime } from './engine.js?v=3.5.0';
+import { $, decorateFrame, drawStats, element, pad, setText, tierName } from './ui.js?v=3.5.0';
 
 function entry(name, description, marker = '') {
   const row = element('li');
@@ -216,7 +216,7 @@ export function runPanels(game, { pick, start, refresh, changed }) {
     const arms = cache && offer.every(item => item.weapon);
     if (arms) setText($('draft-kicker'), 'ARMS CACHE  //  ' + formatTime(game.time));
     setText($('draft-title'), arms ? 'Choose a weapon' : cache && offer.some(item => item.weapon) ? 'Choose a blueprint or weapon' : cache ? 'Choose a blueprint' : starter ? 'Choose your first relic' : 'Choose a relic');
-    setText($('draft-prompt'), arms ? 'Fit one found weapon to your hardpoints.' : cache ? 'Install one blueprint from this cache.' : boss ? 'The Sovereign fell. Recover one effect for this run.' : 'Install one effect for this run.');
+    setText($('draft-prompt'), arms ? 'Fit one found weapon to your hardpoints.' : cache ? 'Pick one.' : boss ? 'The Sovereign fell. Recover one effect for this run.' : 'Install one effect for this run.');
     $('cache-actions').hidden = !cache;
     setText($('cache-shelve'), '[ Save for later ]');
     $('cache-reroll').hidden = false;

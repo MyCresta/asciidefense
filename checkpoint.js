@@ -1,9 +1,9 @@
 // Keep lifetime unlocks independent from the current run. Losing a checkpoint
 // (including when browser storage is full) must never reset the player's record.
-import { DOCTRINES, ENEMIES, POWERS, RUN_PROFILES, UPGRADES } from './content.js?v=3.4.0';
-import { WEAPONS, TRAITS, MAX_GRADE } from './weapons.js?v=3.4.0';
-import { createWorkshop, validWorkshop } from './workshop.js?v=3.4.0';
-import { ELITE_TRAITS, CURSES, ROUTES } from './hazards.js?v=3.4.0';
+import { DOCTRINES, ENEMIES, POWERS, RUN_PROFILES, UPGRADES } from './content.js?v=3.5.0';
+import { WEAPONS, TRAITS, MAX_GRADE } from './weapons.js?v=3.5.0';
+import { createWorkshop, validWorkshop } from './workshop.js?v=3.5.0';
+import { ELITE_TRAITS, CURSES, ROUTES } from './hazards.js?v=3.5.0';
 
 const KEY = 'last-spire.checkpoint.v3';
 const LEGACY_KEY = 'last-spire.checkpoint.v2';
@@ -96,7 +96,7 @@ function validState(s, game) {
   if (!record(s) || s.run !== game.records.runs || !natural(s.run) || !s.run) return false;
   if (!['running', 'paused', 'draft', 'cache'].includes(s.status) || !has(DOCTRINES, s.doctrine)) return false;
   if (!has(RUN_PROFILES, s.profile) || typeof s.fuseUsed !== 'boolean') return false;
-  if (!list(s.draftHistory, 18) || !s.draftHistory.every(key => has(POWERS, key))) return false;
+  if (!list(s.draftHistory, 24) || !s.draftHistory.every(key => has(POWERS, key))) return false;
   if (!numbers(s, ['time', 'best', 'hp', 'maxHp', 'scrap', 'nextDraft', 'nextBoss',
     'gunClock', 'spawnClock', 'pulseAt', 'wardAt'])) return false;
   if (s.hp <= 0 || s.hp > s.maxHp || s.time < 0 || s.scrap < 0

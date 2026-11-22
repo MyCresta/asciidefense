@@ -1,11 +1,11 @@
-import { ENEMIES, UPGRADES, POWERS, DOCTRINES, BLUEPRINTS, SYNERGIES, RUN_PROFILES } from './content.js?v=3.4.0';
-import { restoreCheckpoint, clearCheckpoint } from './checkpoint.js?v=3.4.0';
+import { ENEMIES, UPGRADES, POWERS, DOCTRINES, BLUEPRINTS, SYNERGIES, RUN_PROFILES } from './content.js?v=3.5.0';
+import { restoreCheckpoint, clearCheckpoint } from './checkpoint.js?v=3.5.0';
 
-import { createWorkshop, awardSalvage, pickBlueprint } from './workshop.js?v=3.4.0';
-import { initWeapons, WEAPONS, fireMounts, spreadFire } from './weapons.js?v=3.4.0';
-import * as Relics from './relic-effects.js?v=3.4.0';
-import { applyEliteTrait, rollEliteTrait, cursed, offerRoute, routeActive, routeWeight, tickRoutes } from './hazards.js?v=3.4.0';
-import { applyPerks } from './perks.js?v=3.4.0';
+import { createWorkshop, awardSalvage, pickBlueprint } from './workshop.js?v=3.5.0';
+import { earnHardpoint, initWeapons, WEAPONS, fireMounts, spreadFire } from './weapons.js?v=3.5.0';
+import * as Relics from './relic-effects.js?v=3.5.0';
+import { applyEliteTrait, rollEliteTrait, cursed, offerRoute, routeActive, routeWeight, tickRoutes } from './hazards.js?v=3.5.0';
+import { applyPerks } from './perks.js?v=3.5.0';
 
 export { ENEMIES, UPGRADES, POWERS, DOCTRINES, BLUEPRINTS, SYNERGIES, RUN_PROFILES };
 export const WORLD = Object.freeze({ x: 140, y: 84 });
@@ -298,7 +298,7 @@ export class Game {
       const other = Math.floor(this.random() * (index + 1));
       [choices[index], choices[other]] = [choices[other], choices[index]];
     }
-    this.draftHistory = [...this.draftHistory, ...choices].slice(-18);
+    this.draftHistory = [...this.draftHistory, ...choices].slice(-24);
     if (opening) this.saveRecords(0, false, { openers: choices });
     this.choices = choices;
     this.draftReason = reason;
@@ -316,12 +316,25 @@ export class Game {
     if (key === 'ward') this.wardAt = this.time;
     Relics.onPick(this, key);
     this.note(`Relic installed: ${POWERS[key].name}.`, 'upgrade');
+    if (key === 'wildcard') for (let i = 0; i < 2; i++) this.wildRelic();
     this.noteSynergies(key);
     this.choices = [];
     this.draftReason = null;
     this.status = this.draftReturn === 'paused' ? 'paused' : 'running';
     if (this.queue.length) this.openDraft(this.queue.shift());
     return true;
+  }
+
+  // Wild card: install a random ordinary relic that still has room to stack.
+  wildRelic() {
+    const pool = Object.keys(POWERS).filter(key => !POWERS[key].rare && !POWERS[key].reserve
+      && (!POWERS[key].maxStacks || (this.powers[key] || 0) < POWERS[key].maxStacks));
+    if (!pool.length) return;
+    const key = pool[Math.min(pool.length - 1, Math.floor(this.random() * pool.length))];
+    this.powers[key] = (this.powers[key] || 0) + 1;
+    Relics.onPick(this, key);
+    this.note(`Wild card: ${POWERS[key].name}.`, 'upgrade');
+    this.noteSynergies(key);
   }
 
   spawn(type, x, y, { mini = false, elite = false } = {}) {
@@ -536,22 +549,32 @@ export class Game {
 
   fire(target, shot = {}) {
     this.gunClock = 1 / this.rate;
-    const crit = this.critChance > 0 && this.random() < this.critChance;
-    const amount = this.damage * (shot.scale ?? 1) * (crit ? Relics.criticalMultiplier(this) : 1);
+    const role = shot.role || {};
+    const critChance = this.critChance + (role.crit || 0);
+    const crit = critChance > 0 && this.random() < critChance;
+    let amount = this.damage * (shot.scale ?? 1) * (crit ? Relics.criticalMultiplier(this) * (role.critPower || 1) : 1);
+    if (this.powers.coinflip) amount *= this.random() < .5 ? .5 : 1.7;
+    const before = target.hp + target.shield;
     this.beam(target, shot.kind && shot.kind !== 'shot' ? shot.kind : crit ? 'crit' : 'shot');
     this.shots[this.shots.length - 1].crit = crit;
     this.strike(target, amount, true);
+    if (this.powers.reaper && !target.boss && target.hp > 0 && this.random() < .02 * this.powers.reaper) {
+      this.hurt(target, target.hp + target.shield);
+      this.effect(target.x, target.y, 'crit', 7);
+    }
+    if (target.hp <= 0) Relics.onKillShot(this, target, amount - before);
     if (this.stats && amount > this.stats.bestHit) this.stats.bestHit = amount;
     if (crit || amount >= target.maxHp * .2 || target.boss) this.effect(target.x, target.y, crit ? 'number-crit' : 'number', 1, .65, Math.round(amount));
     if (crit) {
       this.effect(target.x, target.y, 'crit', 5);
       Relics.onCritical(this, target, amount);
     }
-    if (this.splash > 0) {
-      this.effect(target.x, target.y, 'splash', this.splash);
+    const splash = this.splash * (role.splash ?? 1);
+    if (splash > 0) {
+      this.effect(target.x, target.y, 'splash', splash);
       const wildfire = this.synergyActive('wildfire');
       for (const enemy of this.enemies) {
-        if (enemy !== target && enemy.hp > 0 && distance(enemy, target) <= this.splash) this.strike(enemy, amount * .65, false, wildfire);
+        if (enemy !== target && enemy.hp > 0 && distance(enemy, target) <= splash) this.strike(enemy, amount * .65, false, wildfire);
       }
     }
     const struck = new Set([target.id]);
@@ -560,7 +583,8 @@ export class Game {
       if (other) { this.beam(other, 'twin'); this.strike(other, amount * .65, true); }
     }
     let from = target;
-    for (let hop = 0; hop < this.chain + (shot.extraChains || 0); hop++) {
+    const hops = role.chain === 0 ? 0 : this.chain * (role.chain ?? 1) + (shot.extraChains || 0);
+    for (let hop = 0; hop < hops; hop++) {
       const next = this.nearest(from, 23, struck);
       if (!next) break;
       this.beam(next, 'chain', from);
@@ -580,7 +604,9 @@ export class Game {
 
   rewardKill(enemy) {
     const base = Math.round(enemy.reward * this.encounter.salvage * (1 + this.bounty)) + (this.powers.harvest || 0);
-    const payout = (cursed(this, 'greed') ? 1.5 : 1) * (routeActive(this, 'convoy') ? 1.25 : 1);
+    const jackpot = this.powers.jackpot && this.random() < .1;
+    const payout = (cursed(this, 'greed') ? 1.5 : 1) * (routeActive(this, 'convoy') ? 1.25 : 1) * (jackpot ? 3 : 1)
+      * (this.powers.warrant && (enemy.elite || enemy.boss) ? 2 : 1);
     const bounty = Math.round(Relics.bounty(this, enemy, base) * payout);
     this.scrap += bounty;
     this.effect(enemy.x, enemy.y, 'kill', 2.5);
@@ -589,6 +615,7 @@ export class Game {
     Relics.onDeath(this, enemy);
     if (enemy.boss) {
       this.bossKills++;
+      earnHardpoint(this);
       this.queue.push('boss');
       if (!this.route) offerRoute(this);
       this.effect(enemy.x, enemy.y, 'bossfall', 22, 1);
@@ -667,6 +694,7 @@ export class Game {
       const healing = Math.floor(this.kills / interval) - Math.floor(previous / interval);
       this.hp = Math.min(this.maxHp, this.hp + healing);
     }
+    if (this.powers.midas && this.hp > 0) Relics.midas(this, previous, this.kills);
     const oldRank = this.progress.rank;
     this.saveRecords(count);
     for (const unlock of this.progress.unlocks.slice(oldRank)) this.note(`Blueprint unlocked: ${unlock.name}.`, 'unlock');

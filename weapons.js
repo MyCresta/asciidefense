@@ -3,7 +3,7 @@ export const WEAPONS = {
   bolt: {
     name: 'Bolt caster', role: 'PRECISION', scale: 1, cadence: 1.18, reach: 1,
     icon: '  |\\   \n==|=>> \n  |/   ',
-    description: 'Fast, accurate single bolts. A steady carrier for critical hits and on-hit effects.'
+    description: 'Fast single bolts with +12% critical chance and harder critical hits.'
   },
   scatter: {
     name: 'Scattergun', role: 'CLOSE DEFENSE', scale: .78, cadence: 1.12, reach: .83,
@@ -18,12 +18,12 @@ export const WEAPONS = {
   coil: {
     name: 'Arc coil', role: 'CHAIN FIRE', scale: .75, cadence: .96, reach: .95,
     icon: '  ~\\   \n--((o))\n    /~ ',
-    description: 'Each discharge jumps to two extra enemies. Arc chain adds further jumps.'
+    description: 'Jumps to two extra enemies. Arc upgrades count double. No blast.'
   },
   mortar: {
     name: 'Flak mortar', role: 'AREA DENIAL', scale: 1.25, cadence: .62, reach: 1.1, unlock: 120,
     icon: '   _   \n  (_)  \n==/ \\==',
-    description: 'Lobbed shells burst on impact, hitting every enemy close to the target.'
+    description: 'Shells burst on impact. Blast upgrades count double. No arcs.'
   },
   cryo: {
     name: 'Cryo projector', role: 'CONTROL', scale: .7, cadence: 1.05, reach: .9, unlock: 450,
@@ -39,9 +39,32 @@ export function availableWeapons(game) {
 }
 
 export const MOUNT_OUTPUT = [1, .65, .5];
-export const MAX_GRADE = 3;
-export const GRADE_NAMES = ['Standard', 'Refined', 'Masterwork'];
-const GRADE_SCALE = [1, 1.25, 1.5];
+export const MAX_GRADE = 5;
+export const GRADE_NAMES = ['Standard', 'Refined', 'Masterwork', 'Exotic', 'Mythic'];
+const GRADE_SCALE = [1, 1.25, 1.5, 1.8, 2.15];
+
+// Each weapon bends the shared upgrades its own way: blasts, arcs or critical hits.
+export const ROLE_RULES = {
+  bolt: { crit: .12, critPower: 1.25 },
+  coil: { chain: 2, splash: 0 },
+  mortar: { chain: 0, splash: 2 }
+};
+
+// Extra hardpoints are earned by defeating sovereigns, never bought.
+export const HARDPOINT_BOSSES = [0, 1, 3];
+
+export function earnHardpoint(game) {
+  const slots = game.armory.slots;
+  if (slots >= HARDPOINT_BOSSES.length || game.bossKills < HARDPOINT_BOSSES[slots]) return false;
+  game.armory.slots++;
+  game.note('Hardpoint ' + game.armory.slots + ' opened.', 'upgrade');
+  return true;
+}
+
+// The forge raises a fitted weapon one grade. Each grade costs more than the last.
+export function forgePrice(mount) {
+  return mount && mount.grade < MAX_GRADE ? Math.round(150 * 2.1 ** (mount.grade - 1)) : Infinity;
+}
 
 // Every found weapon rolls one trait, so the same frame can play differently between runs.
 export const TRAITS = {
@@ -129,11 +152,6 @@ export function maxWeaponRange(game) {
   return mounts?.length ? game.range * Math.max(...mounts.map(m => mountStats(m).reach)) : game.range;
 }
 
-export function hardpointPrice(game) {
-  const slots = game.armory.slots;
-  return slots === 1 ? 180 : slots === 2 ? 1100 : Infinity;
-}
-
 // Install a found weapon. Returns 'installed', 'upgraded', 'full' (the player must choose a slot) or false.
 export function receiveWeapon(game, item) {
   if (!item || !Object.hasOwn(WEAPONS, item.weapon)) return false;
@@ -194,6 +212,7 @@ export function fireMounts(game, dt) {
       kind: mount.key === 'bolt' ? 'shot' : mount.key,
       scale: stats.scale * MOUNT_OUTPUT[slot],
       extraChains: stats.chains,
+      role: ROLE_RULES[mount.key],
       reach
     });
     if (stats.burn && target.hp > 0) {

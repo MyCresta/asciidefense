@@ -107,15 +107,17 @@ test('destroyed hostiles award early, continuing and boss salvage; a core impact
     creep.hp = 0;
     game.resolveContacts();
     game.time += 2;
-    if (game.workshop.caches > prior) cacheTicks.push(i);
-    prior = game.workshop.caches;
+    if (game.workshop.found > prior) cacheTicks.push(i);
+    prior = game.workshop.found;
   }
   assert.ok(cacheTicks.length >= 3);
   assert.ok(cacheTicks[0] <= 12, 'The first enemy drop must arrive early.');
+  const banked = game.workshop.caches;
   const boss = game.spawn('sovereign', 30, 0);
   boss.hp = 0;
   game.resolveContacts();
-  assert.equal(game.workshop.caches, prior + 1);
+  assert.equal(game.workshop.caches, banked + 1);
+  assert.equal(game.workshop.armsCaches, 1);
   assert.equal(game.bossKills, 1);
 });
 
@@ -131,11 +133,13 @@ test('a capped tower turns banked and future dropped caches into spendable scrap
   assert.equal(openCache(game), false);
   assert.equal(game.scrap, cashed);
   game.enemies = [];
-  const boss = game.spawn('sovereign', 20, 0);
-  boss.hp = 0;
+  game.time = 1000;
+  const elite = game.spawn('brute', 20, 0, { elite: true });
+  elite.hp = 0;
+  game.workshop.dryKills = 30;
   game.resolveContacts();
   assert.equal(game.workshop.caches, 0);
-  assert.ok(game.scrap - cashed > boss.reward, 'Award both bounty and cache salvage');
+  assert.ok(game.scrap - cashed > elite.reward, 'Award both bounty and cache salvage');
   const paid = game.scrap;
   game.resolveContacts();
   assert.equal(game.scrap, paid);
