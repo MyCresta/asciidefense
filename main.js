@@ -1,16 +1,16 @@
-import { SPEEDS, SimulationClock } from './clock.js?v=3.5.0';
-import { initAppearance } from './appearance.js?v=3.5.0';
-import { workbench } from './workbench-ui.js?v=3.5.0';
-import { pickBlueprint, fitChoices, workshopCosts } from './workshop.js?v=3.5.0';
-import { maxWeaponRange, mountStats, mountTitle, WEAPON_COMBOS, weaponComboActive } from './weapons.js?v=3.5.0';
-import { Game, formatTime } from './engine.js?v=3.5.0';
-import { ELITE_TRAITS, ROUTES, chooseRoute, CURSES } from './hazards.js?v=3.5.0';
-import { ENEMIES, POWERS, RUN_PROFILES, SYNERGIES, UPGRADES } from './content.js?v=3.5.0';
-import { TITLE, PORTRAIT, ENEMY_PORTRAITS } from './art.js?v=3.5.0';
-import { Field } from './field.js?v=3.5.0';
-import { saveCheckpoint } from './checkpoint.js?v=3.5.0';
-import { runPanels } from './run-panels.js?v=3.5.0';
-import { $, pad, decorateFrame, drawStats, element, setText, tierName } from './ui.js?v=3.5.0';
+import { SPEEDS, SimulationClock } from './clock.js?v=3.6.0';
+import { initAppearance } from './appearance.js?v=3.6.0';
+import { workbench } from './workbench-ui.js?v=3.6.0';
+import { pickBlueprint, fitChoices, workshopCosts } from './workshop.js?v=3.6.0';
+import { maxWeaponRange, mountStats, mountTitle, WEAPON_COMBOS, weaponComboActive } from './weapons.js?v=3.6.0';
+import { Game, formatTime } from './engine.js?v=3.6.0';
+import { ELITE_TRAITS, ROUTES, chooseRoute, CURSES } from './hazards.js?v=3.6.0';
+import { ENEMIES, POWERS, RUN_PROFILES, SYNERGIES, UPGRADES } from './content.js?v=3.6.0';
+import { TITLE, PORTRAIT, ENEMY_PORTRAITS } from './art.js?v=3.6.0';
+import { Field } from './field.js?v=3.6.0';
+import { saveCheckpoint } from './checkpoint.js?v=3.6.0';
+import { runPanels } from './run-panels.js?v=3.6.0';
+import { $, pad, decorateFrame, drawStats, element, setText, tierName } from './ui.js?v=3.6.0';
 
 const root = document.documentElement;
 function preference(key, fallback) {
@@ -176,6 +176,40 @@ function renderInspector() {
   $('inspect-action').setAttribute('aria-haspopup', enemy ? 'false' : 'dialog');
   $('inspect-action').setAttribute('aria-label', enemy ? game.focusId === enemy.id ? 'Release focus fire' : 'Focus fire on ' + type.name : 'Inspect tower build');
   drawStats($('entity-stats'),stats,true);
+}
+// The Spire's build: every upgrade level, relic and curse, with fresh gains lit up briefly.
+let buildSignature = '', seenLevels = null, seenRun = null;
+const freshUntil = {};
+function renderBuild() {
+  const box = $('build-list');
+  const now = performance.now();
+  if (seenRun !== game.run) { seenRun = game.run; seenLevels = null; }
+  if (seenLevels) for (const key in game.levels) if (game.levels[key] > seenLevels[key]) freshUntil[key] = now + 2400;
+  seenLevels = { ...game.levels };
+  box.hidden = game.selected !== 'tower';
+  if (box.hidden) return;
+  const fresh = Object.keys(freshUntil).filter(key => freshUntil[key] > now);
+  const relics = Object.keys(game.powers).filter(key => game.powers[key] > 0);
+  const signature = JSON.stringify([game.levels, relics.map(key => game.powers[key]), relics, game.curses, fresh]);
+  if (signature === buildSignature) return;
+  buildSignature = signature;
+  $('build-levels').replaceChildren(...Object.keys(UPGRADES).filter(key => game.levels[key] > 0).map(key => {
+    const chip = element('span', 'build-chip' + (fresh.includes(key) ? ' fresh' : ''));
+    chip.append(element('span', '', UPGRADES[key].label), element('b', '', String(game.levels[key])));
+    chip.title = UPGRADES[key].description;
+    return chip;
+  }));
+  const items = relics.map(key => {
+    const item = element('li', '', POWERS[key].name + (game.powers[key] > 1 ? ' x' + game.powers[key] : ''));
+    item.title = POWERS[key].description;
+    return item;
+  });
+  for (const key of game.curses || []) {
+    const item = element('li', 'cursed', CURSES[key].name);
+    item.title = CURSES[key].upside + '. ' + CURSES[key].downside + '.';
+    items.push(item);
+  }
+  $('build-relics').replaceChildren(...items);
 }
 $('inspect-action').addEventListener('click', () => {
   if (game.selected === 'tower') return panels.showDossier('build');
@@ -382,7 +416,7 @@ function renderHud() {
   if (game.hp < previousHp) playTone(100, 0.2, 'sawtooth');
   else if (game.kills > previousKills) playTone(230, 0.06, 'square');
   previousHp = game.hp; previousKills = game.kills;
-  renderInspector(); renderLog(); updateStatus();
+  renderInspector(); renderBuild(); renderLog(); updateStatus();
 }
 function refreshUI() {
   previousFrame = undefined;
