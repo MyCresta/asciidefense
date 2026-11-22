@@ -1,9 +1,9 @@
 // Keep lifetime unlocks independent from the current run. Losing a checkpoint
 // (including when browser storage is full) must never reset the player's record.
-import { DOCTRINES, ENEMIES, POWERS, RUN_PROFILES, UPGRADES } from './content.js?v=3.7.0';
-import { WEAPONS, TRAITS, MAX_GRADE } from './weapons.js?v=3.7.0';
-import { createWorkshop, validWorkshop } from './workshop.js?v=3.7.0';
-import { ELITE_TRAITS, CURSES, ROUTES } from './hazards.js?v=3.7.0';
+import { DOCTRINES, ENEMIES, POWERS, RUN_PROFILES, UPGRADES } from './content.js?v=3.8.0';
+import { WEAPONS, TRAITS, MAX_GRADE } from './weapons.js?v=3.8.0';
+import { createWorkshop, validWorkshop } from './workshop.js?v=3.8.0';
+import { ELITE_TRAITS, CURSES, ROUTES } from './hazards.js?v=3.8.0';
 
 const KEY = 'last-spire.checkpoint.v3';
 const LEGACY_KEY = 'last-spire.checkpoint.v2';

@@ -34,3 +34,18 @@ test('the pixel Spire fills both ASCII Spire boxes', () => {
     assert.match(middle[Math.floor(middle.length / 2)], /[agh]/, name + ' core is lit');
   }
 });
+
+test('every enemy has a vector drawing in its ASCII box', async () => {
+  const { VECTOR_ENEMIES, vectorSpire } = await import('../vector-art.js');
+  for (const [key, ascii] of Object.entries(ENEMY_ART)) {
+    const drawing = VECTOR_ENEMIES[key];
+    assert.ok(drawing, key + ' has a vector drawing');
+    assert.ok(Math.abs(drawing.w - width(ascii) * 6.24) < 1e-6 && drawing.h === ascii.length * 10, key + ' uses the ASCII box');
+    for (const shape of drawing.shapes) {
+      assert.ok(shape.fill || shape.stroke, key + ' shapes are painted');
+      assert.ok(!/NaN|undefined/.test(shape.d), key + ' paths are valid');
+    }
+  }
+  const spire = vectorSpire(width(TOWER), TOWER.length);
+  assert.equal(spire.h, TOWER.length * 10);
+});
