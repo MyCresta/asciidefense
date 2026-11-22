@@ -1,6 +1,6 @@
-import { UPGRADES } from './content.js?v=3.1.0';
-import { cost as relicCost } from './relic-effects.js?v=3.1.0';
-import { WEAPONS, MAX_GRADE, GRADE_NAMES, TRAITS, rollWeapon, receiveWeapon, replaceWeapon, hardpointPrice, mountTitle } from './weapons.js?v=3.1.0';
+import { UPGRADES } from './content.js?v=3.2.0';
+import { cost as relicCost } from './relic-effects.js?v=3.2.0';
+import { WEAPONS, MAX_GRADE, GRADE_NAMES, TRAITS, availableWeapons, rollWeapon, receiveWeapon, replaceWeapon, hardpointPrice, mountTitle } from './weapons.js?v=3.2.0';
 
 const GRADES = ['Standard', 'Refined', 'Masterwork'];
 const RESERVES = new Set(['scrap', 'prospect']);
@@ -125,8 +125,9 @@ function rollArms(game, previous = []) {
   const seen = previous.map(item => item.weapon);
   while (offer.length < 3) {
     const taken = offer.map(item => item.weapon);
-    const fresh = Object.keys(WEAPONS).filter(key => !taken.includes(key) && !seen.includes(key));
-    offer.push(rollWeapon(game, fresh.length ? Object.keys(WEAPONS).filter(key => !fresh.includes(key)) : taken));
+    const pool = availableWeapons(game);
+    const fresh = pool.filter(key => !taken.includes(key) && !seen.includes(key));
+    offer.push(rollWeapon(game, fresh.length ? pool.filter(key => !fresh.includes(key)) : taken));
   }
   return offer;
 }

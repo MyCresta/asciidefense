@@ -1,8 +1,9 @@
 // Keep lifetime unlocks independent from the current run. Losing a checkpoint
 // (including when browser storage is full) must never reset the player's record.
-import { DOCTRINES, ENEMIES, POWERS, RUN_PROFILES, UPGRADES } from './content.js?v=3.1.0';
-import { WEAPONS, TRAITS, MAX_GRADE } from './weapons.js?v=3.1.0';
-import { createWorkshop, validWorkshop } from './workshop.js?v=3.1.0';
+import { DOCTRINES, ENEMIES, POWERS, RUN_PROFILES, UPGRADES } from './content.js?v=3.2.0';
+import { WEAPONS, TRAITS, MAX_GRADE } from './weapons.js?v=3.2.0';
+import { createWorkshop, validWorkshop } from './workshop.js?v=3.2.0';
+import { BARGAINS, ELITE_TRAITS, BARGAIN_FIRST } from './hazards.js?v=3.2.0';
 
 const KEY = 'last-spire.checkpoint.v3';
 const LEGACY_KEY = 'last-spire.checkpoint.v2';
@@ -20,7 +21,8 @@ const RUN_FIELDS = [
   'choices', 'draftReason', 'nextDraft', 'nextBoss', 'warning', 'queue',
   'enemies', 'shots', 'effects', 'log', 'nextId', 'gunClock', 'spawnClock',
   'pulseAt', 'wardAt', 'starterReady', 'relics', 'fuseUsed', 'profile',
-  'draftHistory', 'workshop', 'armory'
+  'draftHistory', 'workshop', 'armory',
+  'bargain', 'boon', 'nextBargain', 'lastBargain', 'stats', 'daily', 'rngState'
 ];
 
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -46,7 +48,8 @@ function validEnemy(enemy) {
       'maxShield', 'lastHit', 'slowUntil', 'burnUntil', 'burnDps', 'pulseAt', 'phaseOffset'])
     && enemy.hp > 0 && enemy.hp <= enemy.maxHp && enemy.shield >= 0 && enemy.shield <= enemy.maxShield
     && natural(enemy.tier) && enemy.tier >= 1 && enemy.tier <= 4
-    && ['elite', 'boss', 'mini'].every(key => typeof enemy[key] === 'boolean');
+    && ['elite', 'boss', 'mini'].every(key => typeof enemy[key] === 'boolean')
+    && (enemy.trait == null || has(ELITE_TRAITS, enemy.trait));
 }
 
 function visualEffect(effect) {
@@ -70,7 +73,21 @@ function validArmory(armory) {
   return true;
 }
 
+function validRunExtras(s) {
+  if (s.bargain !== null && !(record(s.bargain) && has(BARGAINS, s.bargain.key) && number(s.bargain.expires))) return false;
+  if (s.boon !== null && !(record(s.boon) && has(BARGAINS, s.boon.key) && number(s.boon.until))) return false;
+  if (!number(s.nextBargain) || (s.lastBargain !== null && !has(BARGAINS, s.lastBargain))) return false;
+  const stats = s.stats;
+  if (!record(stats) || !numbers(stats, ['dealt', 'bestHit']) || !natural(stats.bargains)) return false;
+  if (!record(stats.taken) || Object.keys(stats.taken).length > 16) return false;
+  if (!Object.entries(stats.taken).every(([key, value]) => (key === 'siege' || has(ENEMIES, key)) && number(value) && value >= 0)) return false;
+  if (stats.fatal !== null) return false;
+  if (s.daily !== null && !(typeof s.daily === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.daily))) return false;
+  return Number.isSafeInteger(s.rngState) && s.rngState >= 0 && s.rngState <= 0xFFFFFFFF;
+}
+
 function validState(s, game) {
+  if (!validRunExtras(s)) return false;
   if (!record(s) || s.run !== game.records.runs || !natural(s.run) || !s.run) return false;
   if (!['running', 'paused', 'draft', 'cache'].includes(s.status) || !has(DOCTRINES, s.doctrine)) return false;
   if (!has(RUN_PROFILES, s.profile) || typeof s.fuseUsed !== 'boolean') return false;
@@ -152,11 +169,11 @@ function upgradeLegacyState(state) {
   // V2 and V3 share their combat rules for already-installed items. Preserve
   // the exact ranks, wallet, timers and any relics already shown to the player.
   if (!record(state) || !list(state.choices, 3) || !['running', 'paused', 'draft'].includes(state.status)) return null;
-  return {
+  return addRunExtras({
     ...state, profile: 'baseline', fuseUsed: false,
     draftHistory: [...state.choices], workshop: createWorkshop(),
     armory: { slots: 1, mounts: [{ key: 'bolt', grade: 1, trait: null, cooldown: state.gunClock }] }
-  };
+  });
 }
 
 // Version 3 saves chose and refitted weapons freely. Keep their fitted weapons
@@ -171,7 +188,18 @@ function upgradeFittedState(state) {
     };
   }
   if (workshop.armsCaches === undefined) state.workshop = { ...workshop, armsCaches: 0, weaponDue: 0, pending: null };
-  return state;
+  return addRunExtras(state);
+}
+
+// Saves from before bargains, run statistics and the daily challenge.
+function addRunExtras(state) {
+  if (!record(state) || state.stats !== undefined) return state;
+  const time = Number.isFinite(state.time) ? state.time : 0;
+  return {
+    ...state, bargain: null, boon: null, lastBargain: null, daily: null, rngState: 0,
+    nextBargain: Math.max(BARGAIN_FIRST, time + 30),
+    stats: { dealt: 0, bestHit: 0, taken: {}, fatal: null, bargains: 0 }
+  };
 }
 
 export function restoreCheckpoint(game) {

@@ -19,8 +19,24 @@ export const WEAPONS = {
     name: 'Arc coil', role: 'CHAIN FIRE', scale: .75, cadence: .96, reach: .95,
     icon: '  ~\\   \n--((o))\n    /~ ',
     description: 'Each discharge jumps to two extra enemies. Arc chain adds further jumps.'
+  },
+  mortar: {
+    name: 'Flak mortar', role: 'AREA DENIAL', scale: 1.25, cadence: .62, reach: 1.1, unlock: 120,
+    icon: '   _   \n  (_)  \n==/ \\==',
+    description: 'Lobbed shells burst on impact, hitting every enemy close to the target.'
+  },
+  cryo: {
+    name: 'Cryo projector', role: 'CONTROL', scale: .7, cadence: 1.05, reach: .9, unlock: 450,
+    icon: '  \\|/  \n--=*=--\n  /|\\  ',
+    description: 'Freezing bolts slow the target and anything standing next to it.'
   }
 };
+
+// Later weapon types join the pool once enough hostiles have fallen across all runs.
+export function availableWeapons(game) {
+  const kills = game.progress?.totalKills ?? 0;
+  return Object.keys(WEAPONS).filter(key => !WEAPONS[key].unlock || kills >= WEAPONS[key].unlock);
+}
 
 export const MOUNT_OUTPUT = [1, .65, .5];
 export const MAX_GRADE = 3;
@@ -58,14 +74,14 @@ export function mountTitle(mount) {
 
 // The starting weapon is drawn at random; later weapons only come from salvage caches.
 export function initWeapons(game, primary = null) {
-  const keys = Object.keys(WEAPONS);
+  const keys = availableWeapons(game);
   const key = Object.hasOwn(WEAPONS, primary) ? primary : keys[Math.min(keys.length - 1, Math.floor(game.random() * keys.length))];
   game.armory = { slots: 1, mounts: [{ key, grade: 1, trait: null, cooldown: 0 }] };
 }
 
 export function rollWeapon(game, exclude = []) {
-  const keys = Object.keys(WEAPONS).filter(key => !exclude.includes(key));
-  const pool = keys.length ? keys : Object.keys(WEAPONS);
+  const keys = availableWeapons(game).filter(key => !exclude.includes(key));
+  const pool = keys.length ? keys : availableWeapons(game);
   const weapon = pool[Math.min(pool.length - 1, Math.floor(game.random() * pool.length))];
   const traits = Object.keys(TRAITS);
   const trait = traits[Math.min(traits.length - 1, Math.floor(game.random() * traits.length))];
@@ -151,6 +167,18 @@ export function fireMounts(game, dt) {
       target.burnDps = (remaining + hit * stats.burn) / 3;
       target.burnUntil = game.time + 3;
       game.effect(target.x, target.y, 'burn', 3);
+    }
+    if (mount.key === 'mortar') {
+      game.effect(target.x, target.y, 'splash', 9);
+      for (const enemy of game.enemies) {
+        if (enemy !== target && enemy.hp > 0 && Math.hypot(enemy.x - target.x, enemy.y - target.y) <= 9) game.strike(enemy, hit * .7, false);
+      }
+    }
+    if (mount.key === 'cryo') {
+      for (const enemy of game.enemies) {
+        if (enemy.hp > 0 && Math.hypot(enemy.x - target.x, enemy.y - target.y) <= 7) enemy.slowUntil = Math.max(enemy.slowUntil, game.time + 2.5);
+      }
+      game.effect(target.x, target.y, 'chill', 7, .5);
     }
     if (mount.key === 'scatter' || mount.key === 'lance') {
       const scatter = mount.key === 'scatter';

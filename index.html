@@ -7,9 +7,9 @@
   <meta name="description" content="Defend the Last Spire in an endless, all-ASCII tower defense roguelike.">
   <title>Last Spire | ASCII Tower Defense</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="./style.css?v=3.1.0">
-  <link rel="stylesheet" href="./appearance.css?v=3.1.0">
-  <script type="module" src="./main.js?v=3.1.0"></script>
+  <link rel="stylesheet" href="./style.css?v=3.2.0">
+  <link rel="stylesheet" href="./appearance.css?v=3.2.0">
+  <script type="module" src="./main.js?v=3.2.0"></script>
 </head>
 <body>
   <main class="console">
@@ -39,18 +39,27 @@
 
     <div class="workspace">
       <section class="frame battlefield" aria-labelledby="field-title">
-        <div class="section-head"><h2 id="field-title"><i aria-hidden="true">//</i> Battlefield</h2><button id="field-profile" aria-haspopup="dialog" title="View encounter conditions"></button><span id="live" class="live">[*] LIVE</span></div>
+        <div class="section-head"><h2 id="field-title"><i aria-hidden="true">//</i> Battlefield</h2><button id="field-profile" aria-haspopup="dialog" title="View encounter conditions"></button><span id="timeline" class="timeline" title="Upcoming draft (D), sovereign (B) and bargain (E) over the next three minutes"></span><span id="live" class="live">[*] LIVE</span></div>
         <div class="arena">
           <canvas id="field" tabindex="0" aria-label="Battlefield. Use arrow keys to cycle targets and Enter to inspect. Click or tap a unit to inspect it.">The Last Spire battlefield</canvas>
           <div id="siege-alert" class="siege-alert" hidden></div>
+          <div id="bargain" class="bargain" role="group" aria-labelledby="bargain-title" hidden>
+            <div class="bargain-head"><span id="bargain-kicker" class="eyebrow">BARGAIN</span><span id="bargain-clock"></span></div>
+            <strong id="bargain-title"></strong>
+            <span id="bargain-up" class="bargain-up"></span>
+            <span id="bargain-down" class="bargain-down"></span>
+            <div id="bargain-actions" class="bargain-actions"><button id="bargain-accept">[Y] Accept</button><button id="bargain-decline">[N] Decline</button></div>
+          </div>
           <div class="field-coords" aria-hidden="true">X <span id="coord-x">+000</span> &nbsp; Y <span id="coord-y">+000</span></div>
-          <button id="range-toggle" aria-pressed="true">[x] Range</button>
+          <div class="field-toggles"><button id="numbers-toggle" aria-pressed="true">[x] Numbers</button><button id="range-toggle" aria-pressed="true">[x] Range</button></div>
           <div id="field-overlay" hidden>
             <div class="overlay-box frame">
               <div id="overlay-kicker" class="eyebrow"></div>
               <h3 id="overlay-title"></h3>
               <div id="overlay-detail"></div>
+              <dl id="overlay-summary" class="run-summary" hidden></dl>
               <button id="overlay-action" class="action-button"></button>
+              <button id="overlay-daily" class="secondary-button" hidden>[ Daily challenge ]</button>
               <button id="overlay-loadout" class="secondary-button">[ Change doctrine ]</button>
             </div>
           </div>
@@ -90,7 +99,7 @@
     </div>
 
     <footer>
-      <div class="key-guide"><span><b>[Click]</b> Inspect</span><span><b>[C]</b> Open cache</span><span><b>[Esc]</b> Pause</span></div>
+      <div class="key-guide"><span><b>[Click]</b> Inspect</span><span><b>[C]</b> Open cache</span><span><b>[Space]</b> Pause</span><span class="key-bargain"><b>[Y/N]</b> Bargain</span></div>
       <div class="footer-actions"><button id="fullscreen" hidden aria-pressed="false">[ Fullscreen ]</button>
       <button id="records" aria-haspopup="dialog"><span>[</span> Run dossier <span>]</span></button></div>
     </footer>

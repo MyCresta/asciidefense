@@ -1,9 +1,9 @@
-import { WEAPONS, mountTitle } from './weapons.js?v=3.1.0';
-import { workshopCosts, describeBlueprint, rerollCache, closeCache, fitChoices, cancelFit } from './workshop.js?v=3.1.0';
-import { BLUEPRINTS, DOCTRINES, ENEMIES, RUN_PROFILES, POWERS, SYNERGIES, UPGRADES } from './content.js?v=3.1.0';
-import { ENEMY_PORTRAITS } from './art.js?v=3.1.0';
-import { formatTime } from './engine.js?v=3.1.0';
-import { $, decorateFrame, drawStats, element, pad, setText, tierName } from './ui.js?v=3.1.0';
+import { WEAPONS, mountTitle } from './weapons.js?v=3.2.0';
+import { workshopCosts, describeBlueprint, rerollCache, closeCache, fitChoices, cancelFit } from './workshop.js?v=3.2.0';
+import { BLUEPRINTS, DOCTRINES, ENEMIES, RUN_PROFILES, POWERS, SYNERGIES, UPGRADES } from './content.js?v=3.2.0';
+import { ENEMY_PORTRAITS } from './art.js?v=3.2.0';
+import { formatTime } from './engine.js?v=3.2.0';
+import { $, decorateFrame, drawStats, element, pad, setText, tierName } from './ui.js?v=3.2.0';
 
 function entry(name, description, marker = '') {
   const row = element('li');
@@ -82,6 +82,13 @@ function recordsView(parent, game) {
     const note = unlocked ? bp.description : bp.kills + ' lifetime kills. ' + bp.description;
     items.append(entry(bp.name, note, unlocked ? '[x] ' : '[ ] '));
   }
+  const arms = section(parent, 'Weapon finds');
+  for (const gun of Object.values(WEAPONS).filter(item => item.unlock)) {
+    const unlocked = gun.unlock <= kills;
+    arms.append(entry(gun.name, (unlocked ? 'Can drop in caches. ' : gun.unlock + ' lifetime kills. ') + gun.description, unlocked ? '[x] ' : '[ ] '));
+  }
+  const daily = game.dailyRecord;
+  stats(parent, [['Daily challenge', daily.date], ['Best today', daily.best ? formatTime(daily.best) : '--:--']]);
 }
 
 function bestiaryView(parent) {
@@ -126,7 +133,12 @@ function loadoutView(parent, game, start) {
   }
   const weaponNote = element('p','loadout-description','Your starting weapon is found at random. More weapons turn up in salvage caches.');
   launch.addEventListener('click', () => { if (chosen) start(chosen); });
-  parent.append(picker, weaponNote, note, launch);
+  const record = game.dailyRecord;
+  const daily = element('button', 'daily-button');
+  daily.append(element('b', '', '[ Daily challenge ' + record.date + ' ]'),
+    element('small', '', 'Everyone gets the same encounter, weapon, relic offers and drops today. Uses the selected doctrine. ' + (record.best ? 'Your best today: ' + formatTime(record.best) + '.' : 'No attempt yet today.')));
+  daily.addEventListener('click', () => start(chosen || game.doctrine, { daily: true }));
+  parent.append(picker, weaponNote, note, launch, daily);
 }
 
 export function runPanels(game, { pick, start, refresh, changed }) {
@@ -145,10 +157,10 @@ export function runPanels(game, { pick, start, refresh, changed }) {
     else if (view === 'bestiary') bestiaryView(body);
     else if (view === 'records') recordsView(body, game);
     else if (view === 'log') logView(body,game);
-    else loadoutView(body, game, key => {
+    else loadoutView(body, game, (key, options) => {
       resumeOnClose = false;
       dossier.close();
-      start(key);
+      start(key, options);
     });
     if (view === 'log') {
       body.focus({preventScroll:true});
@@ -230,11 +242,19 @@ export function runPanels(game, { pick, start, refresh, changed }) {
       if (bp?.weapon) card.classList.add('weapon-card');
       card.append(element('span','power-family',family),sigil,element('strong','power-name',power.name),element('span','power-effect',power.description),choose);
       if (cache) card.insertBefore(element('span','blueprint-gain',bp.effect),choose);
-      const combo = cache ? Object.values(SYNERGIES).find(item => item.upgrade === key && game.powers[item.power] && game.levels[key] < item.level && game.levels[key] + offer[i].levels >= item.level) : Object.values(SYNERGIES).find(item => item.power === key);
+      // Blueprint cards name the combo they complete or advance; relic cards name the combo they open.
+      const owned = item => game.powers[item.power] && game.levels[item.upgrade] < item.level;
+      const combo = cache
+        ? Object.values(SYNERGIES).find(item => item.upgrade === key && owned(item) && game.levels[key] + offer[i].levels >= item.level)
+          || Object.values(SYNERGIES).find(item => item.upgrade === key && owned(item))
+        : Object.values(SYNERGIES).find(item => item.power === key);
       if (combo) {
-        const ready = cache || game.levels[combo.upgrade] >= combo.level;
-        const requirement = UPGRADES[combo.upgrade].label + ' Lv.' + combo.level;
-        const hint = element('span', 'combo-hint', ready ? 'Activates ' + combo.name : combo.name + ' with ' + requirement);
+        const have = game.levels[combo.upgrade];
+        const after = cache ? have + (offer[i].levels || 0) : have;
+        const ready = after >= combo.level;
+        const requirement = UPGRADES[combo.upgrade].label + ' Lv.' + combo.level + ' (now ' + have + ')';
+        const text = ready ? 'Activates ' + combo.name : cache ? 'Toward ' + combo.name + ': Lv.' + after + ' of ' + combo.level : combo.name + ' with ' + requirement;
+        const hint = element('span', 'combo-hint', text);
         card.insertBefore(hint, choose);
         hint.title = combo.description;
       }

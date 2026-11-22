@@ -1,6 +1,6 @@
-import { $, element, pad, setText } from './ui.js?v=3.1.0';
-import { foundry, openCache, workshopCosts } from './workshop.js?v=3.1.0';
-import { WEAPONS, MOUNT_OUTPUT, mountStats, mountTitle } from './weapons.js?v=3.1.0';
+import { $, element, pad, setText } from './ui.js?v=3.2.0';
+import { foundry, openCache, workshopCosts } from './workshop.js?v=3.2.0';
+import { WEAPONS, MOUNT_OUTPUT, mountStats, mountTitle } from './weapons.js?v=3.2.0';
 
 const SERVICES = {
   caches: { name: 'Salvage cache', icon: '  ____ \n /___/|\n |___|/' },

@@ -1,14 +1,16 @@
-import { ENEMIES, UPGRADES, POWERS, DOCTRINES, BLUEPRINTS, SYNERGIES, RUN_PROFILES } from './content.js?v=3.1.0';
-import { restoreCheckpoint, clearCheckpoint } from './checkpoint.js?v=3.1.0';
+import { ENEMIES, UPGRADES, POWERS, DOCTRINES, BLUEPRINTS, SYNERGIES, RUN_PROFILES } from './content.js?v=3.2.0';
+import { restoreCheckpoint, clearCheckpoint } from './checkpoint.js?v=3.2.0';
 
-import { createWorkshop, awardSalvage, pickBlueprint } from './workshop.js?v=3.1.0';
-import { initWeapons, WEAPONS, fireMounts } from './weapons.js?v=3.1.0';
-import * as Relics from './relic-effects.js?v=3.1.0';
+import { createWorkshop, awardSalvage, pickBlueprint } from './workshop.js?v=3.2.0';
+import { initWeapons, WEAPONS, fireMounts } from './weapons.js?v=3.2.0';
+import * as Relics from './relic-effects.js?v=3.2.0';
+import { applyEliteTrait, boonActive, rollEliteTrait, tickBargains, BARGAIN_FIRST } from './hazards.js?v=3.2.0';
 
 export { ENEMIES, UPGRADES, POWERS, DOCTRINES, BLUEPRINTS, SYNERGIES, RUN_PROFILES };
 export const WORLD = Object.freeze({ x: 140, y: 84 });
 
 const SAVE_KEY = 'last-spire.records.v1';
+const DAILY_KEY = 'last-spire.daily.v1';
 const HIT_RADIUS = 4;
 const DRAFT_PERIOD = 120;
 const BOSS_PERIOD = 180;
@@ -52,17 +54,61 @@ function progressFor(totalKills) {
   return { totalKills, rank: unlocks.length, unlocks, nextUnlock: BLUEPRINTS[unlocks.length] || null };
 }
 
+// The daily challenge uses its own stream so every player meets the same run.
+export function todayKey(date = new Date()) {
+  return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+}
+
+export function dailySeed(key) {
+  let hash = 2166136261;
+  for (const char of 'last-spire/' + key) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0;
+  return hash || 1;
+}
+
 function distance(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
 const CORE = { x: 0, y: 0 };
 
 export class Game {
   constructor({ random = Math.random, storage = browserStorage(), resume = false } = {}) {
+    this.baseRandom = random;
     this.random = random;
     this.storage = storage;
     this.records = readRecords(storage);
     this.progress = progressFor(this.records.totalKills);
-    if (resume && restoreCheckpoint(this)) return;
+    if (resume && restoreCheckpoint(this)) {
+      this.bindRandom();
+      return;
+    }
     this.restart();
+  }
+
+  // Mulberry32 over a saved state, so a resumed daily run continues the same sequence.
+  bindRandom() {
+    if (!this.daily) {
+      this.random = this.baseRandom;
+      return;
+    }
+    this.random = () => {
+      this.rngState = (this.rngState + 0x6D2B79F5) >>> 0;
+      let t = this.rngState;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  get dailyRecord() {
+    let data = null;
+    try { data = JSON.parse(this.storage?.getItem(DAILY_KEY)); } catch { /* Storage is optional. */ }
+    const today = todayKey();
+    return data?.date === today && Number.isFinite(data.best) ? { date: today, best: data.best, tries: data.tries || 0 } : { date: today, best: 0, tries: 0 };
+  }
+
+  saveDaily(finished = false) {
+    if (!this.daily || this.daily !== todayKey()) return;
+    const record = this.dailyRecord;
+    const next = { date: record.date, best: Math.max(record.best, Math.floor(this.time)), tries: record.tries + Number(finished) };
+    try { this.storage?.setItem(DAILY_KEY, JSON.stringify(next)); } catch { /* Keep playing without a record. */ }
   }
 
   saveRecords(_newKills = 0, newRun = false, memory = {}) {
@@ -87,10 +133,14 @@ export class Game {
     return Object.keys(DOCTRINES).filter(key => DOCTRINES[key].kills <= this.progress.totalKills);
   }
 
-  restart(doctrineKey = this.doctrine || 'sentinel', primaryWeapon = null) {
+  restart(doctrineKey = this.doctrine || 'sentinel', primaryWeapon = null, { daily = false } = {}) {
     if (!this.availableDoctrines.includes(doctrineKey) || (primaryWeapon !== null && !Object.hasOwn(WEAPONS, primaryWeapon))) return false;
+    if (this.daily && this.status !== 'over') this.saveDaily(true);
     clearCheckpoint(this);
-    const profiles = Object.keys(RUN_PROFILES).filter(key => key !== this.records.lastProfile);
+    this.daily = daily ? todayKey() : null;
+    this.rngState = daily ? dailySeed(this.daily) : 0;
+    this.bindRandom();
+    const profiles = Object.keys(RUN_PROFILES).filter(key => daily || key !== this.records.lastProfile);
     // Reservoir sampling gives every available profile equal odds without retaining a shuffled deck.
     this.profile = profiles.reduce((picked, key, index) => this.random() < 1 / (index + 1) ? key : picked, profiles[0]);
     this.saveRecords(0, true, { profile: this.profile });
@@ -130,6 +180,9 @@ export class Game {
     this.gunClock = 0;
     this.spawnClock = 1.9;
     this.pulseAt = this.wardAt = 0;
+    this.bargain = this.boon = this.lastBargain = null;
+    this.nextBargain = BARGAIN_FIRST;
+    this.stats = { dealt: 0, bestHit: 0, taken: {}, fatal: null, bargains: 0 };
     initWeapons(this, primaryWeapon);
     const mirrorX = this.random() < .5 ? -1 : 1;
     const mirrorY = this.random() < .5 ? -1 : 1;
@@ -147,7 +200,7 @@ export class Game {
   get range() { return Relics.stat(this, 'range', 37 + 4.5 * (this.levels.range - 1) + this.bonus.range + 12 * (this.powers.scope || 0)); }
   get rate() {
     const base = (.85 * 1.19 ** (this.levels.rate - 1) + this.bonus.rate) * (1 + .25 * (this.powers.overclock || 0));
-    return Relics.stat(this, 'rate', base * (1 + .02 * this.workshop.tunes));
+    return Relics.stat(this, 'rate', base * (1 + .02 * this.workshop.tunes)) * (boonActive(this, 'overdrive') ? 1.35 : 1);
   }
   get damage() {
     const base = 8 + 2 * (this.levels.damage - 1) + this.bonus.damage + (this.powers.reactor || 0);
@@ -264,6 +317,7 @@ export class Game {
   }
 
   spawn(type, x, y, { mini = false, elite = false } = {}) {
+    const trait = elite ? rollEliteTrait(this) : null;
     const profile = ENEMIES[type];
     // Smooth growth keeps later minutes responsive to loadout strength and salvage luck.
     const reinforcement = this.time / (this.time + 600);
@@ -277,8 +331,10 @@ export class Game {
       damage: Math.max(1, Math.round(profile.damage * this.encounter.damage * (mini ? .45 : elite ? 1.6 : 1) * (1 + this.time / 1200))),
       reward: mini ? 1 : profile.reward * (elite ? 2 : 1), tier: Math.min(4, profile.tier + Number(elite)),
       boss: type === 'sovereign', elite, mini, shield: maxShield, maxShield,
-      lastHit: -1000, slowUntil: 0, burnUntil: 0, burnDps: 0, pulseAt: this.time + 5, phaseOffset: this.random() * 7
+      lastHit: -1000, slowUntil: 0, burnUntil: 0, burnDps: 0, pulseAt: this.time + 5, phaseOffset: this.random() * 7,
+      trait: null
     };
+    if (trait) applyEliteTrait(enemy, trait);
     this.enemies.push(enemy);
     return enemy;
   }
@@ -298,9 +354,11 @@ export class Game {
     let roll = this.random() * rows.reduce((sum, row) => sum + weight(row), 0);
     const { type } = rows.find(row => (roll -= weight(row)) < 0) || rows[rows.length - 1];
     const point = this.entryPoint();
-    const elite = this.time >= 300 && this.random() < Math.min(.30, .07 + (this.time - 300) / 1800);
+    const elite = boonActive(this, 'bloodprice')
+      ? this.random() < .35
+      : this.time >= 300 && this.random() < Math.min(.30, .07 + (this.time - 300) / 1800);
     this.spawn(type, point.x, point.y, { elite });
-    this.spawnClock += this.encounter.interval * Math.max(.39, 2.7 / (1 + this.time / 95)) * (.70 + .60 * this.random());
+    this.spawnClock += (boonActive(this, 'lull') ? 1 / .6 : 1) * this.encounter.interval * Math.max(.39, 2.7 / (1 + this.time / 95)) * (.70 + .60 * this.random());
   }
 
   scheduleBoss() {
@@ -333,6 +391,7 @@ export class Game {
     this.spawnClock -= dt;
     if (this.spawnClock <= 0) this.spawnContact();
     this.scheduleBoss();
+    tickBargains(this);
     const threat = 1 + Math.floor(this.time / 45);
     if (threat !== this.threat) {
       this.threat = threat;
@@ -350,6 +409,7 @@ export class Game {
     if (this.hp <= 0) {
       this.status = 'over';
       this.saveRecords();
+      this.saveDaily(true);
       this.best = this.records.best;
       this.queue = [];
       clearCheckpoint(this);
@@ -371,6 +431,7 @@ export class Game {
       this.hurt(enemy, enemy.burnDps * burningTime);
     }
     if (enemy.hp <= 0) return;
+    if (enemy.trait === 'mending' && enemy.hp < enemy.maxHp) enemy.hp = Math.min(enemy.maxHp, enemy.hp + enemy.maxHp * .03 * dt);
     if (enemy.maxShield && this.time - enemy.lastHit >= 7) {
       enemy.shield = Math.min(enemy.maxShield, enemy.shield + dt * enemy.maxShield / 3);
     }
@@ -389,6 +450,7 @@ export class Game {
     let speed = enemy.speed * (this.time < enemy.slowUntil ? .65 : 1);
     if (enemy.type === 'wraith' && (this.time + enemy.phaseOffset) % 6.5 < 1.2) speed *= 2.1;
     if (enemy.type === 'moth' && gap < 32) speed *= 1.4;
+    if (boonActive(this, 'goldrush')) speed *= 1.25;
     speed = Relics.speed(this, enemy, speed);
     const factor = gap > 0 ? Math.max(0, gap - speed * dt) / gap : 0;
     enemy.x *= factor;
@@ -433,6 +495,8 @@ export class Game {
 
   hurt(enemy, amount) {
     if (enemy.hp <= 0 || amount <= 0) return;
+    if (enemy.trait === 'plated') amount *= .7;
+    if (this.stats) this.stats.dealt += Math.min(amount, enemy.hp + enemy.shield);
     const shielded = Math.min(enemy.shield, amount);
     enemy.shield -= shielded;
     if (shielded && enemy.shield === 0) this.effect(enemy.x, enemy.y, 'shield', 6);
@@ -467,6 +531,8 @@ export class Game {
     this.beam(target, shot.kind && shot.kind !== 'shot' ? shot.kind : crit ? 'crit' : 'shot');
     this.shots[this.shots.length - 1].crit = crit;
     this.strike(target, amount, true);
+    if (this.stats && amount > this.stats.bestHit) this.stats.bestHit = amount;
+    if (crit || amount >= target.maxHp * .2 || target.boss) this.effect(target.x, target.y, crit ? 'number-crit' : 'number', 1, .65, Math.round(amount));
     if (crit) {
       this.effect(target.x, target.y, 'crit', 5);
       Relics.onCritical(this, target, amount);
@@ -496,13 +562,16 @@ export class Game {
     return amount;
   }
 
-  effect(x, y, type, radius, life = .38) {
-    this.effects.push({ x, y, type, radius, life, maxLife: life });
+  effect(x, y, type, radius, life = .38, value) {
+    const effect = { x, y, type, radius, life, maxLife: life };
+    if (value !== undefined) effect.value = value;
+    this.effects.push(effect);
   }
 
   rewardKill(enemy) {
     const base = Math.round(enemy.reward * this.encounter.salvage * (1 + this.bounty)) + (this.powers.harvest || 0);
-    const bounty = Relics.bounty(this, enemy, base);
+    const boon = boonActive(this, 'lull') ? 0 : boonActive(this, 'goldrush') ? 1.6 : 1;
+    const bounty = Math.round(Relics.bounty(this, enemy, base) * boon);
     this.scrap += bounty;
     this.effect(enemy.x, enemy.y, 'kill', 2.5);
     this.note(`${ENEMIES[enemy.type].name} destroyed. +${bounty} scrap.`, 'kill');
@@ -529,7 +598,7 @@ export class Game {
         removed.add(fallen.id);
         this.rewardKill(fallen);
         killed++;
-        if (fallen.type === 'splitter') brood.push(fallen);
+        if (fallen.type === 'splitter' || fallen.trait === 'volatile') brood.push(fallen);
         continue;
       }
       const breach = this.enemies.find(enemy => atCore(enemy) && !removed.has(enemy.id));
@@ -554,9 +623,15 @@ export class Game {
       this.note('Phase ward absorbed an impact.', 'system');
       return;
     }
-    const damage = Math.max(1, Math.round((siegeDamage || enemy.damage) - this.armor));
+    const overdrive = boonActive(this, 'overdrive') ? 1.5 : 1;
+    const damage = Math.max(1, Math.round(((siegeDamage || enemy.damage) - this.armor) * overdrive));
     const applied = Relics.impact(this, enemy, damage);
     this.hp = Math.min(this.maxHp, Math.max(0, this.hp - applied));
+    if (this.stats && applied > 0) {
+      const source = siegeDamage ? 'siege' : enemy.type;
+      this.stats.taken[source] = (this.stats.taken[source] || 0) + applied;
+      if (this.hp <= 0) this.stats.fatal = source;
+    }
     this.effect(0, 0, 'hit', 3);
     if (applied > 0) this.note(`${siegeDamage ? 'Siege bolt' : 'Core hit'}. -${Math.round(applied)} integrity.`, 'damage');
   }

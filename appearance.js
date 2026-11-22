@@ -2,7 +2,9 @@
 const themes = {
   terminal: 'Terminal', mono: 'Monochrome', amber: 'Amber', ice: 'Glacier',
   ember: 'Ember', orchid: 'Orchid', cobalt: 'Cobalt', tide: 'Tidepool',
-  rose: 'Wild Rose', blueprint: 'Blueprint', paper: 'Paper', dusk: 'Dusk'
+  rose: 'Wild Rose', blueprint: 'Blueprint', paper: 'Paper', dusk: 'Dusk',
+  // Blue/orange and pure luminance pairs stay distinct under common color vision deficiencies.
+  signal: 'Signal (CVD)', contrast: 'High contrast'
 };
 
 export function initAppearance({ onChange } = {}) {
