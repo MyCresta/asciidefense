@@ -1,12 +1,13 @@
 import { AsciiStyle } from './ascii-style.js?v=3.8.0';
 import { PixelStyle } from './pixel-style.js?v=3.8.0';
+import { VectorStyle } from './vector-style.js?v=3.8.0';
 
 const HALF_WORLD_WIDTH = 140;
 const HALF_WORLD_HEIGHT = 84;
 const SWAP_SECONDS = 1.1;
 const REDUCED_MOTION = globalThis.matchMedia ? matchMedia('(prefers-reduced-motion: reduce)') : { matches: true };
 const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
-export const ART_STYLES = [AsciiStyle, PixelStyle];
+export const ART_STYLES = [AsciiStyle, PixelStyle, VectorStyle];
 
 export class Field {
   constructor(canvas, game, onInspect) {

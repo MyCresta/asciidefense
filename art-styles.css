@@ -53,6 +53,37 @@
 /* Canvas text and the cursor follow the pixel font too. */
 :root[data-art=pixel] #ascii-cursor { font-family: var(--ascii-mono); }
 
+/* ---------- Vector ---------- */
+:root[data-art=vector] {
+  --ascii-mono: "DejaVu Sans Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --mono: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+:root[data-art=vector] pre { font-family: var(--ascii-mono); }
+:root[data-art=vector] .glyph-art {
+  color: transparent !important; text-shadow: none !important;
+  background: var(--glyph-image) var(--glyph-position) / var(--glyph-size) no-repeat;
+}
+/* Frames: soft rounded panels. */
+:root[data-art=vector] .frame { border-radius: 14px; }
+:root[data-art=vector] .frame-art { border: 1.5px solid var(--line); border-radius: 14px; }
+:root[data-art=vector] .frame-art > * { display: none; }
+:root[data-art=vector] :is(.feed, .upgrade-row + .upgrade-row, .record-body h3, .field-tray)::before {
+  content: ''; height: 1px; background: var(--line); border-radius: 1px;
+}
+:root[data-art=vector] .upgrade-row + .upgrade-row::before { background: var(--faint); }
+:root[data-art=vector] :is(.metric + .metric, .relic-rack)::before { content: ''; width: 1px; background: var(--line); }
+:root[data-art=vector] .metric + .metric::before { height: 34px; }
+:root[data-art=vector] .button-bracket { display: none; }
+:root[data-art=vector] .controls button {
+  padding: 4px 12px; border-radius: 999px; background: var(--surface);
+  box-shadow: inset 0 0 0 1.5px var(--line);
+}
+:root[data-art=vector] .controls button:is(:hover, :focus-visible) { box-shadow: inset 0 0 0 1.5px var(--accent); }
+:root[data-art=vector] .speed-button::before, :root[data-art=vector] .speed-button::after { content: none; }
+:root[data-art=vector] .speed-button { padding: 1px 7px; border-radius: 999px; }
+:root[data-art=vector] .speed-button[aria-pressed=true] { background: var(--accent); color: var(--bg); }
+:root[data-art=vector] #ascii-cursor { font-family: var(--ascii-mono); }
+
 /* ---------- Swap animation ----------
    The new interface is revealed outward from the Spire, in step with the battlefield.
    The battlefield canvases stay live through the swap, so the game never freezes. */

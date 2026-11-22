@@ -122,11 +122,13 @@ button.loadout { background:transparent; }
 /* Art styles. The swap layer sits over the battlefield while a new style is revealed. */
 .field-swap { position:absolute; inset:0; display:block; width:100%; height:100%; pointer-events:none; }
 .field-swap[hidden] { display:none; }
-.portrait-area > #portrait, .portrait-area > #portrait-pixel { transition:opacity .6s ease; }
-#portrait-pixel { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; image-rendering:pixelated; opacity:0; }
+.portrait-area > #portrait, .portrait-area > #portrait-pixel, .portrait-area > #portrait-vector { transition:opacity .6s ease; }
+#portrait-pixel, #portrait-vector { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; image-rendering:pixelated; opacity:0; }
+.vector-portrait { width:84px; height:auto; opacity:0; }
 .species-art { display:grid; place-items:center; justify-self:center; }
 .species-art > * { grid-area:1 / 1; transition:opacity .6s ease; }
 .pixel-portrait { width:84px; height:auto; image-rendering:pixelated; opacity:0; }
-:root[data-art=pixel] #portrait, :root[data-art=pixel] .species-art pre { opacity:0; }
+:root:is([data-art=pixel],[data-art=vector]) #portrait, :root:is([data-art=pixel],[data-art=vector]) .species-art pre { opacity:0; }
+:root[data-art=vector] #portrait-vector, :root[data-art=vector] .vector-portrait { opacity:1; }
 :root[data-art=pixel] #portrait-pixel, :root[data-art=pixel] .pixel-portrait { opacity:1; }
 @media (prefers-reduced-motion: reduce) { .portrait-area > *, .species-art > * { transition-duration:.2s; } }

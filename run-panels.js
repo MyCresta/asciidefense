@@ -4,6 +4,7 @@ import { workshopCosts, describeBlueprint, rerollCache, closeCache, fitChoices, 
 import { BLUEPRINTS, ENEMIES, RUN_PROFILES, POWERS, SYNERGIES, UPGRADES } from './content.js?v=3.8.0';
 import { ENEMY_PORTRAITS } from './art.js?v=3.8.0';
 import { paintPortrait } from './pixel-art.js?v=3.8.0';
+import { vectorElement } from './vector-art.js?v=3.8.0';
 import { formatTime } from './engine.js?v=3.8.0';
 import { $, decorateFrame, drawStats, element, pad, setText, tierName } from './ui.js?v=3.8.0';
 
@@ -103,7 +104,7 @@ function bestiaryView(parent) {
     portrait.setAttribute('aria-hidden', 'true');
     const pixels = element('canvas', 'pixel-portrait');
     paintPortrait(pixels, key);
-    portrait.append(element('pre', '', ENEMY_PORTRAITS[key].join('\n')), pixels);
+    portrait.append(element('pre', '', ENEMY_PORTRAITS[key].join('\n')), pixels, vectorElement(key, 'vector-portrait'));
     const copy = element('div');
     copy.append(element('strong', '', enemy.trait), element('p', '', enemy.description), element('small', '', 'Base HP ' + enemy.hp + '  /  Impact ' + enemy.damage));
     info.append(portrait, copy);

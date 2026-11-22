@@ -10,6 +10,7 @@ import { TITLE, PORTRAIT, ENEMY_PORTRAITS } from './art.js?v=3.8.0';
 import { Field, ART_STYLES } from './field.js?v=3.8.0';
 import { initPixelUI } from './pixel-ui.js?v=3.8.0';
 import { paintPortrait } from './pixel-art.js?v=3.8.0';
+import { fillVectorElement } from './vector-art.js?v=3.8.0';
 import { saveCheckpoint } from './checkpoint.js?v=3.8.0';
 import { runPanels } from './run-panels.js?v=3.8.0';
 import { $, pad, decorateFrame, drawStats, element, setText, tierName } from './ui.js?v=3.8.0';
@@ -201,6 +202,7 @@ function renderInspector() {
   inspectedSnapshot = signature;
   setText($('portrait'), (enemy ? ENEMY_PORTRAITS[enemy.type] : PORTRAIT).join('\n'));
   paintPortrait($('portrait-pixel'), enemy ? enemy.type : 'tower');
+  fillVectorElement($('portrait-vector'), enemy ? enemy.type : 'tower');
   setText($('entity-class'), enemy ? (enemy.boss ? '[!] BOSS' : enemy.elite ? '[!] ELITE' : '[-] HOSTILE') : '[+] FRIENDLY');
   setText($('entity-name'), enemy ? type.name + (enemy.rank > 1 ? ' ' + tierName(Math.min(4, enemy.rank)) : '') : 'The Spire');
   setText($('entity-type'), enemy ? 'Tier ' + tierName(enemy.tier) + ' / ' + type.trait : mountTitle(game.armory.mounts[0]));
