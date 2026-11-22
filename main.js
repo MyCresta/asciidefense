@@ -1,16 +1,16 @@
-import { SPEEDS, SimulationClock } from './clock.js?v=3.3.0';
-import { initAppearance } from './appearance.js?v=3.3.0';
-import { workbench } from './workbench-ui.js?v=3.3.0';
-import { pickBlueprint, fitChoices, workshopCosts } from './workshop.js?v=3.3.0';
-import { maxWeaponRange, mountStats, mountTitle, WEAPON_COMBOS, weaponComboActive } from './weapons.js?v=3.3.0';
-import { Game, formatTime } from './engine.js?v=3.3.0';
-import { ELITE_TRAITS, answerBargain, describeBargain, boonActive, ROUTES, chooseRoute, CURSES } from './hazards.js?v=3.3.0';
-import { DOCTRINES, ENEMIES, POWERS, RUN_PROFILES, SYNERGIES, UPGRADES } from './content.js?v=3.3.0';
-import { TITLE, PORTRAIT, ENEMY_PORTRAITS } from './art.js?v=3.3.0';
-import { Field } from './field.js?v=3.3.0';
-import { saveCheckpoint } from './checkpoint.js?v=3.3.0';
-import { runPanels } from './run-panels.js?v=3.3.0';
-import { $, pad, decorateFrame, drawStats, element, setText, tierName } from './ui.js?v=3.3.0';
+import { SPEEDS, SimulationClock } from './clock.js?v=3.5.0';
+import { initAppearance } from './appearance.js?v=3.5.0';
+import { workbench } from './workbench-ui.js?v=3.5.0';
+import { pickBlueprint, fitChoices, workshopCosts } from './workshop.js?v=3.5.0';
+import { maxWeaponRange, mountStats, mountTitle, WEAPON_COMBOS, weaponComboActive } from './weapons.js?v=3.5.0';
+import { Game, formatTime } from './engine.js?v=3.5.0';
+import { ELITE_TRAITS, ROUTES, chooseRoute, CURSES } from './hazards.js?v=3.5.0';
+import { ENEMIES, POWERS, RUN_PROFILES, SYNERGIES, UPGRADES } from './content.js?v=3.5.0';
+import { TITLE, PORTRAIT, ENEMY_PORTRAITS } from './art.js?v=3.5.0';
+import { Field } from './field.js?v=3.5.0';
+import { saveCheckpoint } from './checkpoint.js?v=3.5.0';
+import { runPanels } from './run-panels.js?v=3.5.0';
+import { $, pad, decorateFrame, drawStats, element, setText, tierName } from './ui.js?v=3.5.0';
 
 const root = document.documentElement;
 function preference(key, fallback) {
@@ -222,22 +222,6 @@ function updateSiege() {
     setText(banner, '[!] SIEGE FROM ' + String(game.warning.edge).toUpperCase() + '  /  ' + secs + 's');
   }
 }
-function updateBargain() {
-  const box = $('bargain');
-  const offer = game.bargain;
-  const boon = game.boon && boonActive(game, game.boon.key) ? game.boon : null;
-  box.hidden = game.status === 'over' || (!offer && !boon);
-  if (box.hidden) return;
-  const key = offer ? offer.key : boon.key;
-  const info = describeBargain(game, key);
-  const remaining = Math.max(0, Math.ceil((offer ? offer.expires : boon.until) - game.time));
-  setText($('bargain-kicker'), offer ? 'BARGAIN OFFERED' : 'BARGAIN ACTIVE');
-  setText($('bargain-clock'), (offer ? 'expires ' : '') + remaining + 's');
-  setText($('bargain-title'), info.name + (offer && info.duration ? ' (' + info.duration + 's)' : ''));
-  setText($('bargain-up'), info.upside);
-  setText($('bargain-down'), info.downside);
-  $('bargain-actions').hidden = !offer;
-}
 function updateRoute() {
   const box = $('route');
   box.hidden = !game.route || game.status === 'over';
@@ -260,9 +244,8 @@ $('route-1').addEventListener('click', () => pickRoute(1));
 const TIPS = [
   ['focus', () => game.time > 2, 'Click an enemy to focus fire on it.'],
   ['pause', () => game.time > 25, 'Space pauses and resumes.'],
-  ['cache', () => game.workshop.caches > 0 && game.time > 8, 'Press C to open a salvage cache.'],
-  ['hardpoint', () => game.armory.slots < 3 && game.scrap >= workshopCosts(game).hardpoint, 'Buy a hardpoint to get another weapon.'],
-  ['bargain', () => Boolean(game.bargain), 'Y accepts the bargain, N declines.'],
+  ['cache', () => game.workshop.caches > 0 && game.time > 8, 'Press C to open a big cache.'],
+  ['forge', () => game.scrap >= workshopCosts(game).forge[0], 'Click a weapon to forge it a grade higher.'],
   ['route', () => Boolean(game.route), 'Press 1 or 2 to choose a route.']
 ];
 let tipsSeen = new Set(preference('tips', '').split(',').filter(Boolean));
@@ -288,11 +271,6 @@ $('tip-close').addEventListener('click', () => {
   $('tip').hidden = true;
 });
 
-function answer(accept) {
-  if (answerBargain(game, accept)) commitAction();
-}
-$('bargain-accept').addEventListener('click', () => answer(true));
-$('bargain-decline').addEventListener('click', () => answer(false));
 
 // On the daily challenge, compare kills with your best attempt at the same mark.
 function raceMark() {
@@ -305,7 +283,7 @@ function raceMark() {
   return [element('b', 'race', 'BEST ' + (lead >= 0 ? '+' : '') + lead)];
 }
 
-// The next three minutes as a character strip: D draft, B sovereign, E bargain.
+// The next three minutes as a character strip: D draft, B sovereign.
 const TIMELINE_SPAN = 180, TIMELINE_CELLS = 30;
 function updateTimeline() {
   const cells = Array(TIMELINE_CELLS).fill('-');
@@ -315,7 +293,6 @@ function updateTimeline() {
     const i = Math.min(TIMELINE_CELLS - 1, Math.floor(offset / TIMELINE_SPAN * TIMELINE_CELLS));
     cells[i] = glyph;
   };
-  mark(game.nextBargain, 'E');
   mark(game.nextDraft, 'D');
   mark(game.warning ? game.warning.at : game.nextBoss, 'B');
   const line = cells.join('') + raceMark().map(item => item.textContent).join();
@@ -347,7 +324,6 @@ function summaryRows() {
     ['Weapons', game.armory.mounts.map(mountTitle).join(', ')],
     ['Relics', relics.length ? relics.slice(0, 4).join(', ') + (relics.length > 4 ? ' +' + (relics.length - 4) : '') : 'None'],
     ['Best combo', combos.length ? combos.join(', ') : nearestCombo() || 'None active'],
-    ['Bargains struck', stats.bargains || 0],
     ['Curses', game.curses?.length ? game.curses.map(key => CURSES[key].name).join(', ') : 'None']
   ];
   if (game.daily) rows.unshift(['Daily ' + game.daily, 'Best ' + formatTime(game.dailyRecord.best)]);
@@ -370,7 +346,7 @@ function updateStatus() {
   $('live').classList.toggle('idle',!active);
   $('field-overlay').hidden = active || draft;
   if (active || draft) return;
-  setText($('overlay-kicker'), 'RUN ' + pad(game.run,3) + '  //  ' + DOCTRINES[game.doctrine].name.toUpperCase());
+  setText($('overlay-kicker'), 'RUN ' + pad(game.run,3));
   setText($('overlay-title'),over ? 'The Spire fell.' : 'Paused');
   setText($('overlay-detail'), over ? 'Survived ' + formatTime(game.time) + '  /  ' + game.kills + ' kills\nSovereigns defeated: ' + game.bossKills + '  /  Best: ' + formatTime(game.best) : 'Survival time ' + formatTime(game.time));
   setText($('overlay-action'),over ? '[ Rebuild spire ]' : '[ Resume ]');
@@ -399,7 +375,7 @@ function renderHud() {
     setText($('field-profile'),'/ ' + profile.name);
     $('field-profile').title = profile.description + ' ' + profile.tactic;
   }
-  shop.render(); updateRack(); updateSiege(); updateBargain(); updateRoute(); updateTimeline(); updateTip(); soundLog();
+  shop.render(); updateRack(); updateSiege(); updateRoute(); updateTimeline(); updateTip(); soundLog();
   const coord = value => (value < 0 ? '-' : '+') + pad(Math.min(999,Math.abs(Math.round(value || 0))),3);
   setText($('coord-x'),coord(field.pointer?.x));
   setText($('coord-y'),coord(field.pointer?.y));
@@ -419,8 +395,13 @@ function commitAction() {
   setText($('announcer'), game.log[0]?.text || '');
   refreshUI();
 }
+// Every run opens with the starting relic pick.
+function openStartingRelic() {
+  if (game.starterReady && game.time < 1 && game.status === 'running') game.openStarter();
+}
 function restart(key, options = {}) {
   game.restart(key, null, options);
+  openStartingRelic();
   selectTab(false);
   saveCheckpoint(game);
   refreshUI();
@@ -439,14 +420,14 @@ function installRelic(key) {
 }
 function togglePlay() {
   if (dialog.open || game.status === 'draft' || game.status === 'cache') return;
-  if (game.status === 'over') return restart(game.doctrine, { daily: Boolean(game.daily) });
+  if (game.status === 'over') return restart('sentinel', { daily: Boolean(game.daily) });
   game.togglePause();
   saveCheckpoint(game); refreshUI();
 }
 $('pause').addEventListener('click', togglePlay);
 $('overlay-action').addEventListener('click', togglePlay);
 $('overlay-loadout').addEventListener('click', () => panels.showDossier('loadouts'));
-$('overlay-daily').addEventListener('click', () => restart(game.doctrine, { daily: true }));
+$('overlay-daily').addEventListener('click', () => restart('sentinel', { daily: true }));
 $('rack-action').addEventListener('click', () => {
   if (game.starterReady && game.status !== 'over' && game.openStarter()) {
     saveCheckpoint(game); refreshUI();
@@ -495,8 +476,6 @@ document.addEventListener('keydown', event => {
     return;
   }
   if (game.route && (event.key === '1' || event.key === '2')) { event.preventDefault(); pickRoute(Number(event.key) - 1); return; }
-  if (game.bargain && (event.key === 'y' || event.key === 'Y')) { event.preventDefault(); answer(true); return; }
-  if (game.bargain && (event.key === 'n' || event.key === 'N')) { event.preventDefault(); answer(false); return; }
   if (event.key.toLowerCase() === 'c') { event.preventDefault(); shop.open(); }
   if (event.key === 'Escape' && game.status !== 'over') { event.preventDefault(); togglePlay(); }
 });
@@ -560,5 +539,6 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) storeSession();
 });
 window.addEventListener('pagehide', storeSession);
+openStartingRelic();
 renderHud();
 requestAnimationFrame(frame);

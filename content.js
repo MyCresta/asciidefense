@@ -100,6 +100,76 @@ export const UPGRADES = {
 };
 
 export const POWERS = {
+  reaper: {
+    name: 'Reaper die', family: 'Ballistics', rarity: 'uncommon',
+    description: '2% chance a hit destroys a non-boss hostile outright.',
+    sigil: "  .-.\n (x_x)\n  /|\\", maxStacks: 3
+  },
+  overkill: {
+    name: 'Overkill', family: 'Ballistics', rarity: 'common',
+    description: 'Damage past a kill carries to the next hostile.',
+    sigil: " >>-o\n    \\\n  o-<<", maxStacks: 1
+  },
+  ricochet: {
+    name: 'Ricochet', family: 'Ballistics', rarity: 'common',
+    description: 'Kills bounce a shot to a nearby hostile for 60% damage.',
+    sigil: " o   o\n  \\ /\n   V", maxStacks: 1
+  },
+  coinflip: {
+    name: 'Coin flip', family: 'Ballistics', rarity: 'uncommon',
+    description: 'Each shot deals 50% or 170% damage.',
+    sigil: "  .--.\n ( $? )\n  '--'", maxStacks: 1
+  },
+  hoard: {
+    name: 'Dragon hoard', family: 'Salvage', rarity: 'uncommon',
+    description: '+4% damage per 100 scrap held, up to +40%.',
+    sigil: " /\\_/\\\n( $$$ )\n \\___/", maxStacks: 1
+  },
+  midas: {
+    name: 'Midas gear', family: 'Salvage', rarity: 'common',
+    description: 'Every 25th kill pays a scrap burst.',
+    sigil: "  .-.\n-( $ )-\n  '-'", maxStacks: 1
+  },
+  jackpot: {
+    name: 'Jackpot', family: 'Salvage', rarity: 'common',
+    description: '1 kill in 10 pays triple scrap.',
+    sigil: " [7|7|7]\n  \\===/\n   ||", maxStacks: 1
+  },
+  warrant: {
+    name: 'Bounty board', family: 'Salvage', rarity: 'common',
+    description: 'Elites and bosses pay double scrap.',
+    sigil: " .----.\n |WANT|\n '----'", maxStacks: 1
+  },
+  lucky: {
+    name: 'Lucky charm', family: 'Salvage', rarity: 'uncommon',
+    description: 'Small caches sometimes install a second upgrade.',
+    sigil: "  .*.\n <-+->\n  '*'", maxStacks: 1
+  },
+  magpie: {
+    name: 'Magpie', family: 'Salvage', rarity: 'uncommon',
+    description: 'Elites always drop a big cache.',
+    sigil: "  __\n<(o )___\n (  ._> /", maxStacks: 1
+  },
+  dilation: {
+    name: 'Time dilation', family: 'Control', rarity: 'uncommon',
+    description: 'Hostiles slow down near the core, to half speed.',
+    sigil: " \\  .  /\n  >(o)<\n /  '  \\", maxStacks: 1
+  },
+  coldblood: {
+    name: 'Cold blood', family: 'Control', rarity: 'common',
+    description: 'Slowed hostiles take 30% more damage.',
+    sigil: "  *  *\n -[##]-\n  *  *", maxStacks: 1
+  },
+  pyre: {
+    name: 'Pyre', family: 'Ordnance', rarity: 'common',
+    description: 'Burning hostiles take 25% more damage.',
+    sigil: "  ) (\n ( ) )\n [###]", maxStacks: 1
+  },
+  wildcard: {
+    name: 'Wild card', family: 'Salvage', rarity: 'rare', rare: true,
+    description: 'Install two random relics.',
+    sigil: " .---.\n | ? |\n '---'", maxStacks: 1
+  },
   twinshot: {
     name: 'Forked bolt', family: 'Ballistics', rarity: 'rare', rare: true,
     description: 'Fire a second bolt at another target for 65% damage.',

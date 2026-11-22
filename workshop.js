@@ -1,7 +1,7 @@
-import { UPGRADES } from './content.js?v=3.3.0';
-import { cost as relicCost } from './relic-effects.js?v=3.3.0';
-import { CURSES, applyCurse, cursed } from './hazards.js?v=3.3.0';
-import { WEAPONS, MAX_GRADE, GRADE_NAMES, TRAITS, availableWeapons, rollWeapon, receiveWeapon, replaceWeapon, hardpointPrice, mountTitle } from './weapons.js?v=3.3.0';
+import { UPGRADES } from './content.js?v=3.5.0';
+import { cost as relicCost } from './relic-effects.js?v=3.5.0';
+import { CURSES, applyCurse, cursed } from './hazards.js?v=3.5.0';
+import { WEAPONS, MAX_GRADE, GRADE_NAMES, TRAITS, availableWeapons, rollWeapon, receiveWeapon, replaceWeapon, forgePrice, mountTitle } from './weapons.js?v=3.5.0';
 
 const GRADES = ['Standard', 'Refined', 'Masterwork'];
 const RESERVES = new Set(['scrap', 'prospect']);
@@ -80,6 +80,7 @@ function assayPayouts(game) {
 
 function cashOut(game) {
   const w = game.workshop;
+  if (w.armsCaches) return;
   const value = w.caches * salvageValue(game);
   if (!value) return;
   game.scrap += value;
@@ -92,11 +93,14 @@ function cashOut(game) {
 }
 
 // Called once for each kill, including individual kills in a blast. A boss
-// always delivers a cache. Ordinary drops have their own timer and kill pity.
+// always delivers an arms cache. Other drops have their own timer and kill pity.
+// Ordinary hostiles mostly drop a small cache, which installs one random upgrade
+// on the spot. Elites drop a big cache, which offers a pick of three.
 export function awardSalvage(game, enemy) {
   const w = game.workshop;
   w.dryKills++;
-  if (!enemy.boss) {
+  const magpie = enemy.elite && game.powers?.magpie;
+  if (!enemy.boss && !magpie) {
     if (w.found === 0) {
       if (w.dryKills < 5) return false;
     } else {
@@ -108,18 +112,43 @@ export function awardSalvage(game, enemy) {
       if (w.dryKills < 26 && game.random() >= chance) return false;
     }
   }
-  w.caches++;
   w.found++;
-  if (enemy.boss) w.weaponDue++;
   w.lastDrop = game.time;
   w.dryKills = 0;
-  if (eligible(game).length) {
-    game.note(enemy.boss ? 'Sovereign cache recovered.' : 'Salvage cache recovered.', 'upgrade');
-    if (Number.isFinite(enemy.x) && Number.isFinite(enemy.y)) game.effect(enemy.x, enemy.y, 'cache', 4, .8);
+  const here = Number.isFinite(enemy.x) && Number.isFinite(enemy.y);
+  if (!enemy.boss && !enemy.elite && game.random() >= .15) {
+    smallCache(game);
+    if (game.powers?.lucky && game.random() < .35) smallCache(game);
+    if (here) game.effect(enemy.x, enemy.y, 'cache', 3, .6);
+    return true;
+  }
+  w.caches++;
+  if (enemy.boss) w.armsCaches++;
+  if (enemy.boss || eligible(game).length) {
+    game.note(enemy.boss ? 'Arms cache recovered.' : 'Big cache recovered.', 'upgrade');
+    if (here) game.effect(enemy.x, enemy.y, 'cache', 4, .8);
   } else {
     cashOut(game);
   }
   return true;
+}
+
+// A small cache installs one random upgrade at once, with no pause.
+export function smallCache(game) {
+  const keys = eligible(game);
+  if (!keys.length) {
+    const value = Math.ceil(salvageValue(game) / 2);
+    game.scrap += value;
+    game.note(`Small cache: +${value} scrap.`, 'upgrade');
+    return 'scrap';
+  }
+  const key = keys[Math.min(keys.length - 1, Math.floor(game.random() * keys.length))];
+  const from = game.levels[key];
+  const gain = Math.min(game.random() < .2 ? 2 : 1, UPGRADES[key].maxLevel - from);
+  game.levels[key] = from + gain;
+  game.note(`Small cache: ${UPGRADES[key].label} Lv.${from + gain}.`, 'upgrade');
+  game.noteSynergies?.(key, from);
+  return key;
 }
 
 function rollGrade(game) {
@@ -191,7 +220,7 @@ export function describeBlueprint(game, item) {
     const held = mounts.find(mount => mount.key === item.weapon);
     const name = (trait ? trait.name + ' ' : '') + gun.name;
     const effect = held
-      ? (held.grade >= MAX_GRADE ? 'Already masterwork. Pick to reclaim +' + salvageValue(game) + ' scrap' : 'Reinforce yours to G' + Math.min(MAX_GRADE, Math.max(held.grade + 1, grade)))
+      ? (held.grade >= MAX_GRADE ? 'Already G' + MAX_GRADE + '. Pick to reclaim +' + salvageValue(game) + ' scrap' : 'Reinforce yours to G' + Math.min(MAX_GRADE, Math.max(held.grade + 1, grade)))
       : mounts.length < game.armory.slots ? 'Fits empty hardpoint ' + (mounts.length + 1) : 'Replace a fitted weapon';
     return { name, grade, rarity: GRADE_NAMES[grade - 1], description: gun.description + (trait ? ' ' + trait.description : ''), effect, weapon: true, icon: gun.icon, role: gun.role };
   }
@@ -313,10 +342,10 @@ export function workshopCosts(game) {
   const remaining = eligible(game).length;
   const price = raw => relicCost(game, Math.min(Number.MAX_SAFE_INTEGER, Math.round(raw)));
   return {
-    hardpoint: Number.isFinite(hardpointPrice(game)) ? price(hardpointPrice(game)) : Infinity,
-    commission: remaining ? price(34 * 1.58 ** w.commissioned + 8 * w.commissioned) : Infinity,
+    commission: remaining ? price(40 * 1.4 ** w.commissioned + 10 * w.commissioned) : Infinity,
+    forge: game.armory.mounts.map(mount => Number.isFinite(forgePrice(mount)) ? price(forgePrice(mount)) : Infinity),
     repair: game.hp < game.maxHp ? price((24 + 9 * w.repairs + 3 * Math.floor(game.time / 50)) * (cursed(game, 'hunger') ? 2 : 1)) : Infinity,
-    tune: price(32 + 10 * w.tunes + 4 * w.tunes ** 2),
+    tune: price(30 + 12 * w.tunes + 1.5 * w.tunes ** 2),
     reroll: game.status === 'cache' && remaining > 3 ? price(14 * 1.9 ** w.rerolls + 2 * Math.floor(game.time / 70)) : Infinity
   };
 }
@@ -332,21 +361,27 @@ export function rerollCache(game) {
   return true;
 }
 
+// The forge spends scrap to raise a fitted weapon one grade.
+export function forgeWeapon(game, slot) {
+  const mount = game.armory.mounts[slot];
+  const price = workshopCosts(game).forge[slot];
+  if (!canWork(game) || !mount || !Number.isFinite(price) || game.scrap < price) return false;
+  game.scrap -= price;
+  mount.grade++;
+  game.note(`${mountTitle(mount)} forged.`, 'upgrade');
+  return true;
+}
+
 export function foundry(game, service) {
-  if (!canWork(game) || !['commission', 'repair', 'tune', 'hardpoint'].includes(service)) return false;
+  if (!canWork(game) || !['commission', 'repair', 'tune'].includes(service)) return false;
   const price = workshopCosts(game)[service];
   if (!Number.isFinite(price) || game.scrap < price) return false;
   const w = game.workshop;
   game.scrap -= price;
-  if (service === 'hardpoint') {
-    game.armory.slots++;
-    w.caches++;
-    w.armsCaches++;
-    game.note(`Hardpoint ${game.armory.slots} opened. An arms cache is ready.`, 'upgrade');
-  } else if (service === 'commission') {
+  if (service === 'commission') {
     w.caches++;
     w.commissioned++;
-    game.note('Commissioned a salvage cache.', 'upgrade');
+    game.note('Big cache ordered.', 'upgrade');
   } else if (service === 'repair') {
     const previous = game.hp;
     game.hp = Math.min(game.maxHp, previous + Math.ceil(game.maxHp * .35));

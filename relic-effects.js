@@ -16,6 +16,8 @@ export function stat(game, key, base) {
       if (p.glass) damage *= 1.45;
       if (p.repeater) damage *= .8;
       if (p.regicide) damage *= 1 + .22 * Math.min(game.bossKills, 4);
+      // Hoard: banked scrap sharpens every shot, so saving up is a real choice.
+      if (p.hoard) damage *= 1 + Math.min(.4, Math.max(0, game.scrap) / 2500);
       return damage;
     }
     case 'splash': return p.mesh ? base * .5 : base;
@@ -40,6 +42,8 @@ export function hitFactor(game, target, direct) {
   if (p.buckshot && inRadius(target, CORE, 18)) factor *= 1.35;
   if (p.firstblood && direct && target.hp === target.maxHp) factor *= 1.45;
   if (p.spotter && target.id === game.focusId) factor *= 1.35;
+  if (p.coldblood && target.slowUntil > game.time) factor *= 1.3;
+  if (p.pyre && target.burnUntil > game.time) factor *= 1.25;
   if (p.packhunter) {
     let neighbors = 0;
     for (const other of game.enemies) {
@@ -54,8 +58,32 @@ export function hitFactor(game, target, direct) {
 
 export function speed(game, target, base) {
   if (game.powers.stasis && game.time % 12 < 2 && inRadius(target, CORE, game.range)) return 0;
-  if (game.powers.crowfoot && inRadius(target, CORE, 16)) return base * .8;
-  return base;
+  let speed = base;
+  if (game.powers.crowfoot && inRadius(target, CORE, 16)) speed *= .8;
+  // Time dilation: hostiles slow down the closer they get, down to half speed.
+  if (game.powers.dilation) speed *= .5 + .5 * Math.min(1, Math.hypot(target.x, target.y) / 30);
+  return speed;
+}
+
+// A direct shot that destroys its target: carry the excess on, or bounce a new shot.
+export function onKillShot(game, target, excess) {
+  const p = game.powers;
+  if (!p.overkill && !p.ricochet) return;
+  const struck = new Set([target.id]);
+  const next = game.nearest(target, 26, struck);
+  if (!next) return;
+  if (p.overkill && excess > 0) { game.beam(next, 'chain', target); game.strike(next, excess); }
+  if (p.ricochet && next.hp > 0) { game.beam(next, 'twin', target); game.strike(next, game.damage * .6, true); }
+}
+
+// Midas gear: every 25th kill drops a burst of scrap.
+export function midas(game, previous, kills) {
+  const bursts = Math.floor(kills / 25) - Math.floor(previous / 25);
+  if (bursts <= 0) return;
+  const value = bursts * (15 + 3 * game.threat);
+  game.scrap += value;
+  game.effect(0, 0, 'cache', 6, .8);
+  game.note('Midas gear paid +' + value + ' scrap.', 'upgrade');
 }
 
 export function criticalMultiplier(game) {

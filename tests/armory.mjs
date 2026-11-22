@@ -1,16 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { saveCheckpoint } from '../checkpoint.js';
-import { WEAPONS, TRAITS, mountStats } from '../weapons.js';
-import { openCache, pickBlueprint, closeCache, foundry, workshopCosts, fitChoices } from '../workshop.js';
+import { WEAPONS, TRAITS, MAX_GRADE, mountStats, earnHardpoint } from '../weapons.js';
+import { openCache, pickBlueprint, closeCache, foundry, forgeWeapon, workshopCosts, fitChoices } from '../workshop.js';
 import { CHECKPOINT_KEY, MemoryStorage, start } from './support/gameplay.mjs';
 
 const mount = (key, extra = {}) => ({ key, grade: 1, trait: null, cooldown: 0, ...extra });
 
 function openArmsCache(game) {
-  game.scrap = workshopCosts(game).hardpoint;
-  assert.equal(foundry(game, 'hardpoint'), true);
-  assert.equal(game.workshop.armsCaches, 1);
+  game.bossKills = 1;
+  assert.equal(earnHardpoint(game), true);
+  game.workshop.caches++;
+  game.workshop.armsCaches++;
   assert.equal(openCache(game), true);
   assert.equal(game.status, 'cache');
   return game.workshop.offer;
@@ -31,12 +32,13 @@ test('each run starts with one random, untraited weapon and no free choice', () 
   assert.ok(starts.size >= 3, 'Starting weapons should vary between runs');
 });
 
-test('a hardpoint purchase opens a slot and an arms cache of three distinct found weapons', () => {
+test('hardpoints cannot be bought and open at the first and third sovereign', () => {
   const storage = new MemoryStorage();
   const game = start(91, storage);
-  assert.equal(workshopCosts(game).hardpoint, 180);
+  game.scrap = 1e6;
+  assert.equal(foundry(game, 'hardpoint'), false);
+  assert.equal(earnHardpoint(game), false);
   const offer = openArmsCache(game);
-  assert.equal(game.scrap, 0);
   assert.equal(game.armory.slots, 2);
   assert.equal(offer.length, 3);
   assert.equal(new Set(offer.map(item => item.weapon)).size, 3);
@@ -52,11 +54,27 @@ test('a hardpoint purchase opens a slot and an arms cache of three distinct foun
   assert.equal(game.status, 'running');
   assert.equal(game.armory.mounts.length, 2);
   assert.deepEqual(game.armory.mounts[1], mount(fresh.weapon, { grade: fresh.grade, trait: fresh.trait }));
-  assert.equal(workshopCosts(game).hardpoint, 1100);
-  game.scrap = 1100;
-  assert.equal(foundry(game, 'hardpoint'), true);
-  assert.equal(workshopCosts(game).hardpoint, Infinity);
-  assert.equal(foundry(game, 'hardpoint'), false);
+  game.bossKills = 2;
+  assert.equal(earnHardpoint(game), false);
+  game.bossKills = 3;
+  assert.equal(earnHardpoint(game), true);
+  assert.equal(game.armory.slots, 3);
+  assert.equal(earnHardpoint(game), false);
+});
+
+test('the forge spends rising scrap to raise a weapon up to the top grade', () => {
+  const game = start(92);
+  game.scrap = 1e6;
+  const prices = [];
+  while (Number.isFinite(workshopCosts(game).forge[0])) {
+    prices.push(workshopCosts(game).forge[0]);
+    assert.equal(forgeWeapon(game, 0), true);
+  }
+  assert.equal(game.armory.mounts[0].grade, MAX_GRADE);
+  assert.equal(prices.length, MAX_GRADE - 1);
+  assert.ok(prices.every((price, i) => !i || price > prices[i - 1]));
+  assert.equal(forgeWeapon(game, 0), false);
+  assert.ok(mountStats(mount('bolt', { grade: 5 })).scale > mountStats(mount('bolt', { grade: 3 })).scale);
 });
 
 test('a duplicate find reinforces the held weapon and a masterwork duplicate is reclaimed', () => {
@@ -67,7 +85,7 @@ test('a duplicate find reinforces the held weapon and a masterwork duplicate is 
   assert.equal(openCache(game), true);
   assert.equal(pickBlueprint(game, 'arm:' + key), true);
   assert.deepEqual(game.armory.mounts[0], mount(key, { grade: 2, trait: 'rapid' }));
-  game.armory.mounts[0].grade = 3;
+  game.armory.mounts[0].grade = MAX_GRADE;
   game.workshop.caches = 1;
   game.workshop.offer = [{ key: 'arm:' + key, weapon: key, grade: 2, trait: 'long' }, { key: 'scrap', grade: 1, levels: 1 }, { key: 'prospect', grade: 1, levels: 1 }];
   const scrap = game.scrap;
@@ -125,7 +143,7 @@ test('grades and traits change the stats a mount fires with', () => {
   assert.ok(target.hp < afterShot, 'A searing hit keeps burning');
 });
 
-test('a sovereign cache always carries a found weapon', () => {
+test('a sovereign drops an arms cache and opens the second hardpoint', () => {
   const game = start(12);
   game.enemies = [];
   game.workshop.dryKills = 0;
@@ -138,7 +156,8 @@ test('a sovereign cache always carries a found weapon', () => {
   if (game.status === 'draft') game.pickPower(game.choices[0]);
   if (game.status === 'draft') game.pickPower(game.choices[0]);
   assert.equal(openCache(game), true);
-  assert.equal(game.workshop.offer.filter(item => item.weapon).length, 1);
+  assert.equal(game.armory.slots, 2);
+  assert.equal(game.workshop.offer.filter(item => item.weapon).length, 3);
 });
 
 test('weapon trajectories send the expected number of hits to distinct in-range enemies', () => {

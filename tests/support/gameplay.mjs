@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { Game } from '../../engine.js';
 import { POWERS, UPGRADES } from '../../content.js';
-import { openCache, pickBlueprint, foundry, workshopCosts } from '../../workshop.js';
+import { openCache, pickBlueprint, foundry, forgeWeapon, workshopCosts } from '../../workshop.js';
 
 export const RECORDS_KEY = 'last-spire.records.v1';
 export const CHECKPOINT_KEY = 'last-spire.checkpoint.v3';
@@ -62,15 +62,15 @@ export function shop(game, build) {
     if (best.key in UPGRADES) assert.ok(game.levels[best.key] > level);
     assert.ok(game.scrap >= before);
   }
-  const slots = game.armory.slots;
   const costs = workshopCosts(game);
-  if (slots < 3 && game.scrap >= costs.hardpoint) {
-    foundry(game, 'hardpoint');
+  const forge = costs.forge.indexOf(Math.min(...costs.forge));
+  if (game.scrap >= costs.forge[forge] && costs.forge[forge] < 2 * costs.tune) {
+    forgeWeapon(game, forge);
   } else if (game.hp < 0.6 * game.maxHp && game.scrap >= costs.repair) {
     foundry(game, 'repair');
   } else if (game.scrap >= costs.tune) {
     foundry(game, 'tune');
-  } else if (game.scrap >= costs.commission && slots === 3) {
+  } else if (game.scrap >= costs.commission && game.armory.slots === 3) {
     foundry(game, 'commission');
   }
 }
