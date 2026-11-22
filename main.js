@@ -1,16 +1,17 @@
-import { SPEEDS, SimulationClock } from './clock.js?v=3.6.0';
-import { initAppearance } from './appearance.js?v=3.6.0';
-import { workbench } from './workbench-ui.js?v=3.6.0';
-import { pickBlueprint, fitChoices, workshopCosts } from './workshop.js?v=3.6.0';
-import { maxWeaponRange, mountStats, mountTitle, WEAPON_COMBOS, weaponComboActive } from './weapons.js?v=3.6.0';
-import { Game, formatTime } from './engine.js?v=3.6.0';
-import { ELITE_TRAITS, ROUTES, chooseRoute, CURSES } from './hazards.js?v=3.6.0';
-import { ENEMIES, POWERS, RUN_PROFILES, SYNERGIES, UPGRADES } from './content.js?v=3.6.0';
-import { TITLE, PORTRAIT, ENEMY_PORTRAITS } from './art.js?v=3.6.0';
-import { Field } from './field.js?v=3.6.0';
-import { saveCheckpoint } from './checkpoint.js?v=3.6.0';
-import { runPanels } from './run-panels.js?v=3.6.0';
-import { $, pad, decorateFrame, drawStats, element, setText, tierName } from './ui.js?v=3.6.0';
+import { SPEEDS, SimulationClock } from './clock.js?v=3.7.0';
+import { initAppearance } from './appearance.js?v=3.7.0';
+import { workbench } from './workbench-ui.js?v=3.7.0';
+import { pickBlueprint, fitChoices, workshopCosts } from './workshop.js?v=3.7.0';
+import { maxWeaponRange, mountStats, mountTitle, WEAPON_COMBOS, weaponComboActive } from './weapons.js?v=3.7.0';
+import { Game, formatTime } from './engine.js?v=3.7.0';
+import { ELITE_TRAITS, ROUTES, chooseRoute, CURSES } from './hazards.js?v=3.7.0';
+import { ENEMIES, POWERS, RUN_PROFILES, SYNERGIES, UPGRADES } from './content.js?v=3.7.0';
+import { TITLE, PORTRAIT, ENEMY_PORTRAITS } from './art.js?v=3.7.0';
+import { Field, ART_STYLES } from './field.js?v=3.7.0';
+import { paintPortrait } from './pixel-art.js?v=3.7.0';
+import { saveCheckpoint } from './checkpoint.js?v=3.7.0';
+import { runPanels } from './run-panels.js?v=3.7.0';
+import { $, pad, decorateFrame, drawStats, element, setText, tierName } from './ui.js?v=3.7.0';
 
 const root = document.documentElement;
 function preference(key, fallback) {
@@ -50,6 +51,21 @@ root.style.setProperty('--rule', '"' + '-'.repeat(512) + '"');
 document.querySelectorAll('.frame').forEach(decorateFrame);
 
 const appearance = initAppearance({onChange: () => field.render(game.time)});
+// Art styles swap live like themes. The field reveals the new style outward from the Spire.
+function applyArt(key, animate) {
+  const Style = ART_STYLES.find(item => item.key === key) || ART_STYLES[0];
+  root.dataset.art = Style.key;
+  setText($('art-name'), Style.label);
+  $('art-button').setAttribute('aria-label', 'Art style: ' + Style.label);
+  field.setStyle(Style.key, animate);
+}
+applyArt(preference('art', 'ascii'), false);
+$('art-button').addEventListener('click', () => {
+  const index = ART_STYLES.findIndex(item => item.key === field.styleKey);
+  const next = ART_STYLES[(index + 1) % ART_STYLES.length].key;
+  savePreference('art', next);
+  applyArt(next, true);
+});
 const shop = workbench(game, {changed: commitAction});
 function updateSpeed() {
   for (const button of $('speed-controls').children) {
@@ -164,10 +180,11 @@ function renderInspector() {
   const stats = enemy
     ? [['Integrity', Math.ceil(enemy.hp) + '/' + Math.ceil(enemy.maxHp)], ['Impact', enemy.damage + ' HP'], [flags.length ? 'Status' : 'Speed', flags.length ? flags.join(' / ') : concise(enemy.speed) + ' u/s'], ['Bounty', '$' + enemy.reward]]
     : [['Damage', concise(game.damage) + ' HP'], ['Max reach', concise(maxWeaponRange(game)) + ' u'], ['Main rate', (game.rate * mountStats(game.armory.mounts[0], game).cadence).toFixed(2) + '/s'], ['Splash', game.splash ? concise(game.splash) + ' u' : 'Off']];
-  const signature = [enemy?.id || 'tower', enemy?.tier, game.doctrine, mountTitle(game.armory.mounts[0]), game.focusId, JSON.stringify(stats)].join('/');
+  const signature = [root.dataset.theme, enemy?.id || 'tower', enemy?.tier, game.doctrine, mountTitle(game.armory.mounts[0]), game.focusId, JSON.stringify(stats)].join('/');
   if (signature === inspectedSnapshot) return;
   inspectedSnapshot = signature;
   setText($('portrait'), (enemy ? ENEMY_PORTRAITS[enemy.type] : PORTRAIT).join('\n'));
+  paintPortrait($('portrait-pixel'), enemy ? enemy.type : 'tower');
   setText($('entity-class'), enemy ? (enemy.boss ? '[!] BOSS' : enemy.elite ? '[!] ELITE' : '[-] HOSTILE') : '[+] FRIENDLY');
   setText($('entity-name'), enemy ? type.name + (enemy.rank > 1 ? ' ' + tierName(Math.min(4, enemy.rank)) : '') : 'The Spire');
   setText($('entity-type'), enemy ? 'Tier ' + tierName(enemy.tier) + ' / ' + type.trait : mountTitle(game.armory.mounts[0]));
@@ -554,7 +571,7 @@ function frame(now) {
       nextCheckpoint = now + 4000;
     }
     previousDraft = draftID;
-    if (now >= nextDraw) {
+    if (now >= nextDraw || field.busy) {
       field.render(game.time);
       nextDraw = now + 1000 / 32;
     }

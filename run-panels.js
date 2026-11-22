@@ -1,10 +1,11 @@
-import { WEAPONS, WEAPON_COMBOS, mountTitle } from './weapons.js?v=3.6.0';
-import { PERKS, buyPerk, perkBank, readPerks } from './perks.js?v=3.6.0';
-import { workshopCosts, describeBlueprint, rerollCache, closeCache, fitChoices, cancelFit } from './workshop.js?v=3.6.0';
-import { BLUEPRINTS, ENEMIES, RUN_PROFILES, POWERS, SYNERGIES, UPGRADES } from './content.js?v=3.6.0';
-import { ENEMY_PORTRAITS } from './art.js?v=3.6.0';
-import { formatTime } from './engine.js?v=3.6.0';
-import { $, decorateFrame, drawStats, element, pad, setText, tierName } from './ui.js?v=3.6.0';
+import { WEAPONS, WEAPON_COMBOS, mountTitle } from './weapons.js?v=3.7.0';
+import { PERKS, buyPerk, perkBank, readPerks } from './perks.js?v=3.7.0';
+import { workshopCosts, describeBlueprint, rerollCache, closeCache, fitChoices, cancelFit } from './workshop.js?v=3.7.0';
+import { BLUEPRINTS, ENEMIES, RUN_PROFILES, POWERS, SYNERGIES, UPGRADES } from './content.js?v=3.7.0';
+import { ENEMY_PORTRAITS } from './art.js?v=3.7.0';
+import { paintPortrait } from './pixel-art.js?v=3.7.0';
+import { formatTime } from './engine.js?v=3.7.0';
+import { $, decorateFrame, drawStats, element, pad, setText, tierName } from './ui.js?v=3.7.0';
 
 function entry(name, description, marker = '') {
   const row = element('li');
@@ -98,8 +99,11 @@ function bestiaryView(parent) {
     const summary = element('summary');
     summary.append(element('b', '', enemy.name), element('span', '', 'TIER ' + tierName(enemy.tier)));
     const info = element('div', 'species-card');
-    const portrait = element('pre', '', ENEMY_PORTRAITS[key].join('\n'));
+    const portrait = element('div', 'species-art');
     portrait.setAttribute('aria-hidden', 'true');
+    const pixels = element('canvas', 'pixel-portrait');
+    paintPortrait(pixels, key);
+    portrait.append(element('pre', '', ENEMY_PORTRAITS[key].join('\n')), pixels);
     const copy = element('div');
     copy.append(element('strong', '', enemy.trait), element('p', '', enemy.description), element('small', '', 'Base HP ' + enemy.hp + '  /  Impact ' + enemy.damage));
     info.append(portrait, copy);
