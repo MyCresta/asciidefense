@@ -7,9 +7,9 @@
   <meta name="description" content="Defend the Last Spire in an endless, all-ASCII tower defense roguelike.">
   <title>Last Spire | ASCII Tower Defense</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="./style.css?v=3.2.0">
-  <link rel="stylesheet" href="./appearance.css?v=3.2.0">
-  <script type="module" src="./main.js?v=3.2.0"></script>
+  <link rel="stylesheet" href="./style.css?v=3.3.0">
+  <link rel="stylesheet" href="./appearance.css?v=3.3.0">
+  <script type="module" src="./main.js?v=3.3.0"></script>
 </head>
 <body>
   <main class="console">
@@ -43,6 +43,12 @@
         <div class="arena">
           <canvas id="field" tabindex="0" aria-label="Battlefield. Use arrow keys to cycle targets and Enter to inspect. Click or tap a unit to inspect it.">The Last Spire battlefield</canvas>
           <div id="siege-alert" class="siege-alert" hidden></div>
+          <div id="route" class="route" role="group" aria-label="Choose a route" hidden>
+            <div class="bargain-head"><span class="eyebrow">CHOOSE A ROUTE</span><span id="route-clock"></span></div>
+            <button id="route-0" class="route-option"></button>
+            <button id="route-1" class="route-option"></button>
+          </div>
+          <div id="tip" class="tip" role="status" hidden><span><b>TIP</b> <span id="tip-text"></span></span><button id="tip-close" aria-label="Turn off tips">[x]</button></div>
           <div id="bargain" class="bargain" role="group" aria-labelledby="bargain-title" hidden>
             <div class="bargain-head"><span id="bargain-kicker" class="eyebrow">BARGAIN</span><span id="bargain-clock"></span></div>
             <strong id="bargain-title"></strong>

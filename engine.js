@@ -1,10 +1,11 @@
-import { ENEMIES, UPGRADES, POWERS, DOCTRINES, BLUEPRINTS, SYNERGIES, RUN_PROFILES } from './content.js?v=3.2.0';
-import { restoreCheckpoint, clearCheckpoint } from './checkpoint.js?v=3.2.0';
+import { ENEMIES, UPGRADES, POWERS, DOCTRINES, BLUEPRINTS, SYNERGIES, RUN_PROFILES } from './content.js?v=3.3.0';
+import { restoreCheckpoint, clearCheckpoint } from './checkpoint.js?v=3.3.0';
 
-import { createWorkshop, awardSalvage, pickBlueprint } from './workshop.js?v=3.2.0';
-import { initWeapons, WEAPONS, fireMounts } from './weapons.js?v=3.2.0';
-import * as Relics from './relic-effects.js?v=3.2.0';
-import { applyEliteTrait, boonActive, rollEliteTrait, tickBargains, BARGAIN_FIRST } from './hazards.js?v=3.2.0';
+import { createWorkshop, awardSalvage, pickBlueprint } from './workshop.js?v=3.3.0';
+import { initWeapons, WEAPONS, fireMounts, spreadFire } from './weapons.js?v=3.3.0';
+import * as Relics from './relic-effects.js?v=3.3.0';
+import { applyEliteTrait, boonActive, rollEliteTrait, tickBargains, BARGAIN_FIRST, cursed, offerRoute, routeActive, routeWeight, tickRoutes } from './hazards.js?v=3.3.0';
+import { applyPerks } from './perks.js?v=3.3.0';
 
 export { ENEMIES, UPGRADES, POWERS, DOCTRINES, BLUEPRINTS, SYNERGIES, RUN_PROFILES };
 export const WORLD = Object.freeze({ x: 140, y: 84 });
@@ -101,13 +102,16 @@ export class Game {
     let data = null;
     try { data = JSON.parse(this.storage?.getItem(DAILY_KEY)); } catch { /* Storage is optional. */ }
     const today = todayKey();
-    return data?.date === today && Number.isFinite(data.best) ? { date: today, best: data.best, tries: data.tries || 0 } : { date: today, best: 0, tries: 0 };
+    const trace = Array.isArray(data?.trace) ? data.trace.filter(Number.isSafeInteger).slice(0, 2000) : [];
+    return data?.date === today && Number.isFinite(data.best) ? { date: today, best: data.best, tries: data.tries || 0, trace } : { date: today, best: 0, tries: 0, trace: [] };
   }
 
   saveDaily(finished = false) {
     if (!this.daily || this.daily !== todayKey()) return;
     const record = this.dailyRecord;
-    const next = { date: record.date, best: Math.max(record.best, Math.floor(this.time)), tries: record.tries + Number(finished) };
+    const better = Math.floor(this.time) > record.best;
+    const next = { date: record.date, best: Math.max(record.best, Math.floor(this.time)), tries: record.tries + Number(finished),
+      trace: better ? [...(this.stats?.trace || [])] : record.trace };
     try { this.storage?.setItem(DAILY_KEY, JSON.stringify(next)); } catch { /* Keep playing without a record. */ }
   }
 
@@ -182,8 +186,11 @@ export class Game {
     this.pulseAt = this.wardAt = 0;
     this.bargain = this.boon = this.lastBargain = null;
     this.nextBargain = BARGAIN_FIRST;
-    this.stats = { dealt: 0, bestHit: 0, taken: {}, fatal: null, bargains: 0 };
+    this.stats = { dealt: 0, bestHit: 0, taken: {}, fatal: null, bargains: 0, trace: [] };
+    this.curses = [];
+    this.route = this.path = null;
     initWeapons(this, primaryWeapon);
+    applyPerks(this);
     const mirrorX = this.random() < .5 ? -1 : 1;
     const mirrorY = this.random() < .5 ? -1 : 1;
     const signature = Object.entries(this.encounter.enemyWeights).sort((a, b) => b[1] - a[1])[0];
@@ -200,11 +207,11 @@ export class Game {
   get range() { return Relics.stat(this, 'range', 37 + 4.5 * (this.levels.range - 1) + this.bonus.range + 12 * (this.powers.scope || 0)); }
   get rate() {
     const base = (.85 * 1.19 ** (this.levels.rate - 1) + this.bonus.rate) * (1 + .25 * (this.powers.overclock || 0));
-    return Relics.stat(this, 'rate', base * (1 + .02 * this.workshop.tunes)) * (boonActive(this, 'overdrive') ? 1.35 : 1);
+    return Relics.stat(this, 'rate', base * (1 + .02 * this.workshop.tunes)) * (boonActive(this, 'overdrive') ? 1.35 : 1) * (cursed(this, 'hunger') ? 1.25 : 1);
   }
   get damage() {
     const base = 8 + 2 * (this.levels.damage - 1) + this.bonus.damage + (this.powers.reactor || 0);
-    return Relics.stat(this, 'damage', base + 2 * this.workshop.tunes);
+    return Relics.stat(this, 'damage', base + 2 * this.workshop.tunes) * (cursed(this, 'glass') ? 1.4 : 1);
   }
   get splash() { return Relics.stat(this, 'splash', (this.levels.splash ? 5 + 1.7 * this.levels.splash : 0) + 10 * (this.powers.fracture || 0)); }
   get critChance() { return Relics.stat(this, 'critChance', this.levels.crit * .075); }
@@ -323,7 +330,7 @@ export class Game {
     const reinforcement = this.time / (this.time + 600);
     const endurance = 1 + this.time / 420 + (this.time / 420) ** 2 + (this.time / 75) ** 3 * reinforcement ** 4;
     const scale = this.encounter.hp * endurance;
-    const maxHp = Math.max(1, Math.round(profile.hp * scale * (mini ? .47 : elite ? 2.25 : 1)));
+    const maxHp = Math.max(1, Math.round(profile.hp * scale * (mini ? .47 : elite ? 2.25 : 1) * (cursed(this, 'greed') ? 1.15 : 1)));
     const speed = profile.speed * this.encounter.speed * 1.36 * (1 + Math.min(.75, this.time / 750)) * (mini ? 1.22 : elite ? 1.08 : 1);
     const maxShield = type === 'aegis' ? Math.round(maxHp * .48) : 0;
     const enemy = {
@@ -350,7 +357,7 @@ export class Game {
 
   spawnContact() {
     const rows = SPAWN_TABLE.filter(row => this.time >= row.at);
-    const weight = row => row.weight * (this.encounter.enemyWeights[row.type] ?? 1);
+    const weight = row => row.weight * (this.encounter.enemyWeights[row.type] ?? 1) * routeWeight(this, row.type);
     let roll = this.random() * rows.reduce((sum, row) => sum + weight(row), 0);
     const { type } = rows.find(row => (roll -= weight(row)) < 0) || rows[rows.length - 1];
     const point = this.entryPoint();
@@ -368,7 +375,11 @@ export class Game {
     }
     if (this.warning && this.time >= this.nextBoss) {
       const { x, y } = this.warning;
-      this.spawn('sovereign', x, y);
+      // Each later sovereign adds an attack: escorts, then long-range siege, then splitting.
+      const rank = Math.max(1, Math.round((this.nextBoss - 160) / BOSS_PERIOD) + 1);
+      const boss = this.spawn('sovereign', x, y);
+      boss.rank = rank;
+      if (rank >= 2) for (const sign of [-1, 1]) this.spawn('aegis', x * .95 + sign * 4, y * .95 - sign * 3);
       this.effect(x, y, 'boss', 17, 1);
       this.note('Sovereign entered the field.', 'boss');
       this.warning = null;
@@ -392,6 +403,8 @@ export class Game {
     if (this.spawnClock <= 0) this.spawnContact();
     this.scheduleBoss();
     tickBargains(this);
+    tickRoutes(this);
+    if (this.daily && this.time >= 30 * (this.stats.trace.length + 1)) this.stats.trace.push(this.kills);
     const threat = 1 + Math.floor(this.time / 45);
     if (threat !== this.threat) {
       this.threat = threat;
@@ -437,11 +450,11 @@ export class Game {
     }
     if (enemy.type === 'cantor' && this.time >= enemy.pulseAt) this.healNearby(enemy);
     if (enemy.boss && this.time >= enemy.pulseAt) {
-      enemy.pulseAt = this.time + 17;
+      enemy.pulseAt = this.time + ((enemy.rank || 1) >= 3 ? 11 : 17);
       const escort = this.random() < .5 ? 'crawler' : 'moth';
       this.spawn(escort, enemy.x * .97, enemy.y * .97);
       this.effect(enemy.x, enemy.y, 'boss', 5);
-      if (distance(enemy, CORE) <= 70) {
+      if (distance(enemy, CORE) <= ((enemy.rank || 1) >= 3 ? 105 : 70)) {
         this.beam(CORE, 'siege', enemy);
         this.impact(enemy, 5 + this.threat);
       }
@@ -570,7 +583,8 @@ export class Game {
 
   rewardKill(enemy) {
     const base = Math.round(enemy.reward * this.encounter.salvage * (1 + this.bounty)) + (this.powers.harvest || 0);
-    const boon = boonActive(this, 'lull') ? 0 : boonActive(this, 'goldrush') ? 1.6 : 1;
+    const boon = (boonActive(this, 'lull') ? 0 : boonActive(this, 'goldrush') ? 1.6 : 1)
+      * (cursed(this, 'greed') ? 1.5 : 1) * (routeActive(this, 'convoy') ? 1.25 : 1);
     const bounty = Math.round(Relics.bounty(this, enemy, base) * boon);
     this.scrap += bounty;
     this.effect(enemy.x, enemy.y, 'kill', 2.5);
@@ -580,6 +594,7 @@ export class Game {
     if (enemy.boss) {
       this.bossKills++;
       this.queue.push('boss');
+      if (!this.route) offerRoute(this);
       this.effect(enemy.x, enemy.y, 'bossfall', 22, 1);
       this.note('Sovereign defeated. Rare relic recovered.', 'boss');
     }
@@ -590,6 +605,7 @@ export class Game {
     if (!this.enemies.some(enemy => enemy.hp <= 0 || atCore(enemy))) return;
     const removed = new Set();
     const brood = [];
+    const halves = [];
     let killed = 0;
     // Explosions and return fire can change another contact's fate during the same tick.
     for (;;) {
@@ -599,6 +615,8 @@ export class Game {
         this.rewardKill(fallen);
         killed++;
         if (fallen.type === 'splitter' || fallen.trait === 'volatile') brood.push(fallen);
+        if (fallen.boss && fallen.rank >= 4) halves.push(fallen);
+        spreadFire(this, fallen);
         continue;
       }
       const breach = this.enemies.find(enemy => atCore(enemy) && !removed.has(enemy.id));
@@ -612,6 +630,16 @@ export class Game {
     for (const enemy of brood) {
       for (const sign of [-1, 1]) this.spawn('crawler', enemy.x * .98 + sign * 1.6, enemy.y * .98 - sign, { mini: true });
       this.effect(enemy.x, enemy.y, 'split', 5);
+    }
+    for (const boss of halves) {
+      for (const sign of [-1, 1]) {
+        const half = this.spawn('sovereign', boss.x * .97 + sign * 5, boss.y * .97 - sign * 3);
+        half.boss = false;
+        half.elite = true;
+        half.hp = half.maxHp = Math.max(1, Math.round(boss.maxHp * .35));
+        half.reward = Math.round(boss.reward / 2);
+      }
+      this.effect(boss.x, boss.y, 'split', 9);
     }
     if (killed) this.salvage(killed);
   }

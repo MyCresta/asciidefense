@@ -1,16 +1,16 @@
-import { SPEEDS, SimulationClock } from './clock.js?v=3.2.0';
-import { initAppearance } from './appearance.js?v=3.2.0';
-import { workbench } from './workbench-ui.js?v=3.2.0';
-import { pickBlueprint, fitChoices } from './workshop.js?v=3.2.0';
-import { maxWeaponRange, mountStats, mountTitle } from './weapons.js?v=3.2.0';
-import { Game, formatTime } from './engine.js?v=3.2.0';
-import { ELITE_TRAITS, answerBargain, describeBargain, boonActive, BARGAINS } from './hazards.js?v=3.2.0';
-import { DOCTRINES, ENEMIES, POWERS, RUN_PROFILES, SYNERGIES, UPGRADES } from './content.js?v=3.2.0';
-import { TITLE, PORTRAIT, ENEMY_PORTRAITS } from './art.js?v=3.2.0';
-import { Field } from './field.js?v=3.2.0';
-import { saveCheckpoint } from './checkpoint.js?v=3.2.0';
-import { runPanels } from './run-panels.js?v=3.2.0';
-import { $, pad, decorateFrame, drawStats, element, setText, tierName } from './ui.js?v=3.2.0';
+import { SPEEDS, SimulationClock } from './clock.js?v=3.3.0';
+import { initAppearance } from './appearance.js?v=3.3.0';
+import { workbench } from './workbench-ui.js?v=3.3.0';
+import { pickBlueprint, fitChoices, workshopCosts } from './workshop.js?v=3.3.0';
+import { maxWeaponRange, mountStats, mountTitle, WEAPON_COMBOS, weaponComboActive } from './weapons.js?v=3.3.0';
+import { Game, formatTime } from './engine.js?v=3.3.0';
+import { ELITE_TRAITS, answerBargain, describeBargain, boonActive, ROUTES, chooseRoute, CURSES } from './hazards.js?v=3.3.0';
+import { DOCTRINES, ENEMIES, POWERS, RUN_PROFILES, SYNERGIES, UPGRADES } from './content.js?v=3.3.0';
+import { TITLE, PORTRAIT, ENEMY_PORTRAITS } from './art.js?v=3.3.0';
+import { Field } from './field.js?v=3.3.0';
+import { saveCheckpoint } from './checkpoint.js?v=3.3.0';
+import { runPanels } from './run-panels.js?v=3.3.0';
+import { $, pad, decorateFrame, drawStats, element, setText, tierName } from './ui.js?v=3.3.0';
 
 const root = document.documentElement;
 function preference(key, fallback) {
@@ -163,13 +163,13 @@ function renderInspector() {
   const flags = enemy && [ELITE_TRAITS[enemy.trait]?.name || '', enemy.shield > 0 ? 'Shield ' + Math.ceil(enemy.shield) : '', enemy.burnUntil > game.time ? 'Burning' : '', enemy.slowUntil > game.time ? 'Slowed' : ''].filter(Boolean);
   const stats = enemy
     ? [['Integrity', Math.ceil(enemy.hp) + '/' + Math.ceil(enemy.maxHp)], ['Impact', enemy.damage + ' HP'], [flags.length ? 'Status' : 'Speed', flags.length ? flags.join(' / ') : concise(enemy.speed) + ' u/s'], ['Bounty', '$' + enemy.reward]]
-    : [['Damage', concise(game.damage) + ' HP'], ['Max reach', concise(maxWeaponRange(game)) + ' u'], ['Main rate', (game.rate * mountStats(game.armory.mounts[0]).cadence).toFixed(2) + '/s'], ['Splash', game.splash ? concise(game.splash) + ' u' : 'Off']];
+    : [['Damage', concise(game.damage) + ' HP'], ['Max reach', concise(maxWeaponRange(game)) + ' u'], ['Main rate', (game.rate * mountStats(game.armory.mounts[0], game).cadence).toFixed(2) + '/s'], ['Splash', game.splash ? concise(game.splash) + ' u' : 'Off']];
   const signature = [enemy?.id || 'tower', enemy?.tier, game.doctrine, mountTitle(game.armory.mounts[0]), game.focusId, JSON.stringify(stats)].join('/');
   if (signature === inspectedSnapshot) return;
   inspectedSnapshot = signature;
   setText($('portrait'), (enemy ? ENEMY_PORTRAITS[enemy.type] : PORTRAIT).join('\n'));
   setText($('entity-class'), enemy ? (enemy.boss ? '[!] BOSS' : enemy.elite ? '[!] ELITE' : '[-] HOSTILE') : '[+] FRIENDLY');
-  setText($('entity-name'), enemy ? type.name : 'The Spire');
+  setText($('entity-name'), enemy ? type.name + (enemy.rank > 1 ? ' ' + tierName(Math.min(4, enemy.rank)) : '') : 'The Spire');
   setText($('entity-type'), enemy ? 'Tier ' + tierName(enemy.tier) + ' / ' + type.trait : mountTitle(game.armory.mounts[0]));
   $('entity-type').title = (type?.description || 'Prioritizes the closest hostile in range.') + (enemy?.trait ? ' ' + ELITE_TRAITS[enemy.trait].description : '');
   setText($('inspect-action'), enemy ? game.focusId === enemy.id ? '[ Release ]' : '[ Focus fire ]' : '[ Build ]');
@@ -192,10 +192,14 @@ function renderLog() {
   $('messages').replaceChildren(...messages);
 }
 function concise(value) { return String(Number(value.toFixed(1))); }
+function activeCombos() {
+  return [...Object.keys(SYNERGIES).filter(key => game.synergyActive(key)).map(key => SYNERGIES[key].name),
+    ...Object.keys(WEAPON_COMBOS).filter(key => weaponComboActive(game, key)).map(key => WEAPON_COMBOS[key].name)];
+}
 function updateRack() {
   const owned = Object.keys(game.powers).filter(k => game.powers[k] > 0);
   setText($('relic-timer'), 'DRAFT IN ' + formatTime(Math.ceil(Math.max(0, game.nextDraft - game.time))));
-  const combos = Object.keys(SYNERGIES).filter(key => game.synergyActive(key));
+  const combos = activeCombos();
   const sig = [combos.join(), game.starterReady, game.status === 'over', ...owned.map(k => k + game.powers[k])].join('-');
   if (rackSignature === sig) return;
   rackSignature = sig;
@@ -203,7 +207,7 @@ function updateRack() {
   setText($('rack-action'), ready ? '[ Choose starting relic ]' : '[ View build / ' + owned.length + ' ]');
   $('rack-action').classList.toggle('ready',ready);
   const last = owned.at(-1);
-  setText($('rack-summary'), ready ? '' : combos.length ? 'Active: ' + combos.map(k => SYNERGIES[k].name).join(', ') : last ? POWERS[last].name + (owned.length > 1 ? '  +' + (owned.length - 1) + ' more' : '') : 'No relics installed');
+  setText($('rack-summary'), ready ? '' : combos.length ? 'Active: ' + combos.join(', ') : last ? POWERS[last].name + (owned.length > 1 ? '  +' + (owned.length - 1) + ' more' : '') : 'No relics installed');
 }
 function updateSiege() {
   const boss = game.enemies.find(enemy => enemy.boss);
@@ -234,11 +238,72 @@ function updateBargain() {
   setText($('bargain-down'), info.downside);
   $('bargain-actions').hidden = !offer;
 }
+function updateRoute() {
+  const box = $('route');
+  box.hidden = !game.route || game.status === 'over';
+  if (box.hidden) return;
+  setText($('route-clock'), Math.max(0, Math.ceil(game.route.expires - game.time)) + 's');
+  game.route.options.forEach((key, i) => {
+    const button = $('route-' + i), route = ROUTES[key];
+    if (button.dataset.key === key) return;
+    button.dataset.key = key;
+    button.replaceChildren(element('b', '', '[' + (i + 1) + ']'), element('span', '', route.name), element('small', '', route.foes + '. ' + route.reward + '.'));
+  });
+}
+function pickRoute(i) {
+  if (chooseRoute(game, i)) commitAction();
+}
+$('route-0').addEventListener('click', () => pickRoute(0));
+$('route-1').addEventListener('click', () => pickRoute(1));
+
+// One-time tips for new players, each shown once and all switchable off.
+const TIPS = [
+  ['focus', () => game.time > 2, 'Click an enemy to focus fire on it.'],
+  ['pause', () => game.time > 25, 'Space pauses and resumes.'],
+  ['cache', () => game.workshop.caches > 0 && game.time > 8, 'Press C to open a salvage cache.'],
+  ['hardpoint', () => game.armory.slots < 3 && game.scrap >= workshopCosts(game).hardpoint, 'Buy a hardpoint to get another weapon.'],
+  ['bargain', () => Boolean(game.bargain), 'Y accepts the bargain, N declines.'],
+  ['route', () => Boolean(game.route), 'Press 1 or 2 to choose a route.']
+];
+let tipsSeen = new Set(preference('tips', '').split(',').filter(Boolean));
+let tipShown = null, tipUntil = 0;
+function updateTip() {
+  const now = performance.now();
+  if (tipShown && now < tipUntil && game.status !== 'over') return;
+  tipShown = null;
+  $('tip').hidden = true;
+  if (tipsSeen.has('off') || game.status !== 'running') return;
+  const next = TIPS.find(([key, ready]) => !tipsSeen.has(key) && ready());
+  if (!next) return;
+  tipShown = next[0];
+  tipUntil = now + 7000;
+  tipsSeen.add(next[0]);
+  savePreference('tips', [...tipsSeen].join(','));
+  setText($('tip-text'), next[2]);
+  $('tip').hidden = false;
+}
+$('tip-close').addEventListener('click', () => {
+  tipsSeen.add('off');
+  savePreference('tips', [...tipsSeen].join(','));
+  $('tip').hidden = true;
+});
+
 function answer(accept) {
   if (answerBargain(game, accept)) commitAction();
 }
 $('bargain-accept').addEventListener('click', () => answer(true));
 $('bargain-decline').addEventListener('click', () => answer(false));
+
+// On the daily challenge, compare kills with your best attempt at the same mark.
+function raceMark() {
+  if (!game.daily) return [];
+  const trace = game.dailyRecord.trace;
+  const mark = Math.floor(game.time / 30) - 1;
+  if (!trace.length || mark < 0) return [];
+  if (mark >= trace.length) return [element('b', 'race', 'PAST BEST')];
+  const lead = game.kills - trace[mark];
+  return [element('b', 'race', 'BEST ' + (lead >= 0 ? '+' : '') + lead)];
+}
 
 // The next three minutes as a character strip: D draft, B sovereign, E bargain.
 const TIMELINE_SPAN = 180, TIMELINE_CELLS = 30;
@@ -253,11 +318,11 @@ function updateTimeline() {
   mark(game.nextBargain, 'E');
   mark(game.nextDraft, 'D');
   mark(game.warning ? game.warning.at : game.nextBoss, 'B');
-  const line = cells.join('');
+  const line = cells.join('') + raceMark().map(item => item.textContent).join();
   const node = $('timeline');
   if (node.dataset.line === line) return;
   node.dataset.line = line;
-  node.replaceChildren('NOW ', ...[...line].map(glyph => glyph === '-' ? glyph : element('b', '', glyph)), ' +3:00');
+  node.replaceChildren('NOW ', ...[...cells.join('')].map(glyph => glyph === '-' ? glyph : element('b', '', glyph)), ' +3:00', ...raceMark());
   node.setAttribute('aria-label', 'Next draft in ' + formatTime(game.nextDraft - game.time) + ', next sovereign in ' + formatTime((game.warning ? game.warning.at : game.nextBoss) - game.time));
 }
 
@@ -273,7 +338,7 @@ function summaryRows() {
   const sourceName = key => key === 'siege' ? 'Sovereign siege bolts' : ENEMIES[key]?.name || 'Unknown';
   const taken = Object.entries(stats.taken || {}).sort((a, b) => b[1] - a[1]);
   const relics = Object.entries(game.powers).filter(([, rank]) => rank > 0).map(([key, rank]) => POWERS[key].name + (rank > 1 ? ' x' + rank : ''));
-  const combos = Object.keys(SYNERGIES).filter(key => game.synergyActive(key)).map(key => SYNERGIES[key].name);
+  const combos = activeCombos();
   const rows = [
     ['Fell to', stats.fatal ? sourceName(stats.fatal) : 'Unknown'],
     ['Most damage from', taken.length ? sourceName(taken[0][0]) + ' (' + Math.round(taken[0][1]) + ')' : 'Nothing'],
@@ -282,7 +347,8 @@ function summaryRows() {
     ['Weapons', game.armory.mounts.map(mountTitle).join(', ')],
     ['Relics', relics.length ? relics.slice(0, 4).join(', ') + (relics.length > 4 ? ' +' + (relics.length - 4) : '') : 'None'],
     ['Best combo', combos.length ? combos.join(', ') : nearestCombo() || 'None active'],
-    ['Bargains struck', stats.bargains || 0]
+    ['Bargains struck', stats.bargains || 0],
+    ['Curses', game.curses?.length ? game.curses.map(key => CURSES[key].name).join(', ') : 'None']
   ];
   if (game.daily) rows.unshift(['Daily ' + game.daily, 'Best ' + formatTime(game.dailyRecord.best)]);
   return rows;
@@ -333,7 +399,7 @@ function renderHud() {
     setText($('field-profile'),'/ ' + profile.name);
     $('field-profile').title = profile.description + ' ' + profile.tactic;
   }
-  shop.render(); updateRack(); updateSiege(); updateBargain(); updateTimeline(); soundLog();
+  shop.render(); updateRack(); updateSiege(); updateBargain(); updateRoute(); updateTimeline(); updateTip(); soundLog();
   const coord = value => (value < 0 ? '-' : '+') + pad(Math.min(999,Math.abs(Math.round(value || 0))),3);
   setText($('coord-x'),coord(field.pointer?.x));
   setText($('coord-y'),coord(field.pointer?.y));
@@ -428,6 +494,7 @@ document.addEventListener('keydown', event => {
     togglePlay();
     return;
   }
+  if (game.route && (event.key === '1' || event.key === '2')) { event.preventDefault(); pickRoute(Number(event.key) - 1); return; }
   if (game.bargain && (event.key === 'y' || event.key === 'Y')) { event.preventDefault(); answer(true); return; }
   if (game.bargain && (event.key === 'n' || event.key === 'N')) { event.preventDefault(); answer(false); return; }
   if (event.key.toLowerCase() === 'c') { event.preventDefault(); shop.open(); }

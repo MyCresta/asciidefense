@@ -1,6 +1,6 @@
-import { TOWER, TOWER_SMALL, ENEMY_ART } from './art.js?v=3.2.0';
-import { ELITE_TRAITS } from './hazards.js?v=3.2.0';
-import { maxWeaponRange } from './weapons.js?v=3.2.0';
+import { TOWER, TOWER_SMALL, ENEMY_ART } from './art.js?v=3.3.0';
+import { ELITE_TRAITS } from './hazards.js?v=3.3.0';
+import { maxWeaponRange } from './weapons.js?v=3.3.0';
 
 const FONT = '"Lucida Console", "Liberation Mono", "Courier New", monospace';
 const TAU = Math.PI * 2;
@@ -353,7 +353,8 @@ export class Field {
     }
     ctx.font = `bold 9px ${FONT}`;
     if (enemy.boss) {
-      ctx.fillText('[ SOVEREIGN ]', clamp(p.x, 38, this.w - 38), Math.max(6, y - 5));
+      const rank = enemy.rank > 1 ? ' ' + ['', 'I', 'II', 'III', 'IV', 'V'][Math.min(5, enemy.rank)] : '';
+      ctx.fillText('[ SOVEREIGN' + rank + ' ]', clamp(p.x, 38, this.w - 38), Math.max(6, y - 5));
     } else if (active) {
       const trait = ELITE_TRAITS[enemy.trait];
       const label = (trait ? trait.name.toUpperCase() + ' ' : enemy.elite ? '! ' : '') + 'T' + (enemy.tier || 1);

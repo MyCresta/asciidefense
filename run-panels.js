@@ -1,9 +1,10 @@
-import { WEAPONS, mountTitle } from './weapons.js?v=3.2.0';
-import { workshopCosts, describeBlueprint, rerollCache, closeCache, fitChoices, cancelFit } from './workshop.js?v=3.2.0';
-import { BLUEPRINTS, DOCTRINES, ENEMIES, RUN_PROFILES, POWERS, SYNERGIES, UPGRADES } from './content.js?v=3.2.0';
-import { ENEMY_PORTRAITS } from './art.js?v=3.2.0';
-import { formatTime } from './engine.js?v=3.2.0';
-import { $, decorateFrame, drawStats, element, pad, setText, tierName } from './ui.js?v=3.2.0';
+import { WEAPONS, WEAPON_COMBOS, mountTitle } from './weapons.js?v=3.3.0';
+import { PERKS, buyPerk, perkBank, readPerks } from './perks.js?v=3.3.0';
+import { workshopCosts, describeBlueprint, rerollCache, closeCache, fitChoices, cancelFit } from './workshop.js?v=3.3.0';
+import { BLUEPRINTS, DOCTRINES, ENEMIES, RUN_PROFILES, POWERS, SYNERGIES, UPGRADES } from './content.js?v=3.3.0';
+import { ENEMY_PORTRAITS } from './art.js?v=3.3.0';
+import { formatTime } from './engine.js?v=3.3.0';
+import { $, decorateFrame, drawStats, element, pad, setText, tierName } from './ui.js?v=3.3.0';
 
 function entry(name, description, marker = '') {
   const row = element('li');
@@ -131,14 +132,29 @@ function loadoutView(parent, game, start) {
     });
     picker.append(button);
   }
-  const weaponNote = element('p','loadout-description','Your starting weapon is found at random. More weapons turn up in salvage caches.');
+  const weaponNote = element('p','loadout-description','Your starting weapon is random.');
   launch.addEventListener('click', () => { if (chosen) start(chosen); });
   const record = game.dailyRecord;
   const daily = element('button', 'daily-button');
   daily.append(element('b', '', '[ Daily challenge ' + record.date + ' ]'),
-    element('small', '', 'Everyone gets the same encounter, weapon, relic offers and drops today. Uses the selected doctrine. ' + (record.best ? 'Your best today: ' + formatTime(record.best) + '.' : 'No attempt yet today.')));
+    element('small', '', 'The same run for everyone today. Best: ' + (record.best ? formatTime(record.best) : '--:--')));
   daily.addEventListener('click', () => start(chosen || game.doctrine, { daily: true }));
-  parent.append(picker, weaponNote, note, launch, daily);
+  const shop = element('div', 'perk-shop');
+  function drawShop() {
+    const owned = readPerks(game.storage).owned;
+    const bank = perkBank(game);
+    const rows = Object.entries(PERKS).map(([key, perk]) => {
+      const have = owned.includes(key);
+      const button = element('button', 'perk');
+      button.append(element('span', '', perk.name), element('small', '', perk.effect), element('b', '', have ? '[ Owned ]' : '[ ' + perk.cost + ' kills ]'));
+      button.disabled = have || bank < perk.cost;
+      button.addEventListener('click', () => { if (buyPerk(game, key)) drawShop(); });
+      return button;
+    });
+    shop.replaceChildren(element('h3', '', 'Perks  /  ' + bank + ' kills to spend'), ...rows);
+  }
+  drawShop();
+  parent.append(picker, weaponNote, note, launch, daily, shop);
 }
 
 export function runPanels(game, { pick, start, refresh, changed }) {
@@ -235,11 +251,12 @@ export function runPanels(game, { pick, start, refresh, changed }) {
       const power = cache ? { ...bp, sigil: bp.icon || UPGRADES[key]?.icon || '  [*]  ', family: bp.rarity } : POWERS[key];
       const rank = cache ? 1 : (game.powers[key] || 0) + 1;
       const card = element('button', 'draft-card frame');
-      const family = bp?.weapon ? bp.role + ' / ' + bp.rarity.toUpperCase() + ' G' + bp.grade : cache ? bp.rarity.toUpperCase() + ' / G' + bp.grade : (power.rarity !== 'common' ? power.rarity.toUpperCase() + ' / ' : '') + power.family.toUpperCase();
+      const family = bp?.curse ? 'CURSED' : bp?.weapon ? bp.role + ' / ' + bp.rarity.toUpperCase() + ' G' + bp.grade : cache ? bp.rarity.toUpperCase() + ' / G' + bp.grade : (power.rarity !== 'common' ? power.rarity.toUpperCase() + ' / ' : '') + power.family.toUpperCase();
       const sigil = element('pre', 'power-sigil', power.sigil);
       sigil.setAttribute('aria-hidden', 'true');
       const choose = element('span', 'draft-select', '[ ' + (i + 1) + ' ] Install');
       if (bp?.weapon) card.classList.add('weapon-card');
+      if (bp?.curse) card.classList.add('curse-card');
       card.append(element('span','power-family',family),sigil,element('strong','power-name',power.name),element('span','power-effect',power.description),choose);
       if (cache) card.insertBefore(element('span','blueprint-gain',bp.effect),choose);
       // Blueprint cards name the combo they complete or advance; relic cards name the combo they open.
@@ -257,6 +274,15 @@ export function runPanels(game, { pick, start, refresh, changed }) {
         const hint = element('span', 'combo-hint', text);
         card.insertBefore(hint, choose);
         hint.title = combo.description;
+      }
+      // Weapon traits combo with relics: name the combo a weapon or relic card would switch on.
+      const traitCombo = bp?.weapon
+        ? Object.values(WEAPON_COMBOS).find(item => item.trait === offer[i].trait && game.powers[item.power])
+        : !cache && Object.values(WEAPON_COMBOS).find(item => item.power === key && game.armory.mounts.some(mount => mount.trait === item.trait));
+      if (!combo && traitCombo) {
+        const hint = element('span', 'combo-hint', 'Activates ' + traitCombo.name);
+        hint.title = traitCombo.description;
+        card.insertBefore(hint, choose);
       }
       if (rank > 1) choose.append(element('small','',' Rank ' + rank));
       card.setAttribute('aria-label', power.name + '. ' + power.description + (cache ? ' ' + bp.effect : '') + ' Press ' + (i + 1) + ' to install.');

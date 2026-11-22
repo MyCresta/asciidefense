@@ -1,9 +1,9 @@
 // Keep lifetime unlocks independent from the current run. Losing a checkpoint
 // (including when browser storage is full) must never reset the player's record.
-import { DOCTRINES, ENEMIES, POWERS, RUN_PROFILES, UPGRADES } from './content.js?v=3.2.0';
-import { WEAPONS, TRAITS, MAX_GRADE } from './weapons.js?v=3.2.0';
-import { createWorkshop, validWorkshop } from './workshop.js?v=3.2.0';
-import { BARGAINS, ELITE_TRAITS, BARGAIN_FIRST } from './hazards.js?v=3.2.0';
+import { DOCTRINES, ENEMIES, POWERS, RUN_PROFILES, UPGRADES } from './content.js?v=3.3.0';
+import { WEAPONS, TRAITS, MAX_GRADE } from './weapons.js?v=3.3.0';
+import { createWorkshop, validWorkshop } from './workshop.js?v=3.3.0';
+import { BARGAINS, ELITE_TRAITS, BARGAIN_FIRST, CURSES, ROUTES } from './hazards.js?v=3.3.0';
 
 const KEY = 'last-spire.checkpoint.v3';
 const LEGACY_KEY = 'last-spire.checkpoint.v2';
@@ -22,7 +22,8 @@ const RUN_FIELDS = [
   'enemies', 'shots', 'effects', 'log', 'nextId', 'gunClock', 'spawnClock',
   'pulseAt', 'wardAt', 'starterReady', 'relics', 'fuseUsed', 'profile',
   'draftHistory', 'workshop', 'armory',
-  'bargain', 'boon', 'nextBargain', 'lastBargain', 'stats', 'daily', 'rngState'
+  'bargain', 'boon', 'nextBargain', 'lastBargain', 'stats', 'daily', 'rngState',
+  'curses', 'route', 'path'
 ];
 
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -49,7 +50,8 @@ function validEnemy(enemy) {
     && enemy.hp > 0 && enemy.hp <= enemy.maxHp && enemy.shield >= 0 && enemy.shield <= enemy.maxShield
     && natural(enemy.tier) && enemy.tier >= 1 && enemy.tier <= 4
     && ['elite', 'boss', 'mini'].every(key => typeof enemy[key] === 'boolean')
-    && (enemy.trait == null || has(ELITE_TRAITS, enemy.trait));
+    && (enemy.trait == null || has(ELITE_TRAITS, enemy.trait))
+    && (enemy.rank === undefined || (natural(enemy.rank) && enemy.rank <= 10000));
 }
 
 function visualEffect(effect) {
@@ -82,6 +84,11 @@ function validRunExtras(s) {
   if (!record(stats.taken) || Object.keys(stats.taken).length > 16) return false;
   if (!Object.entries(stats.taken).every(([key, value]) => (key === 'siege' || has(ENEMIES, key)) && number(value) && value >= 0)) return false;
   if (stats.fatal !== null) return false;
+  if (stats.trace !== undefined && !(list(stats.trace, 4000) && stats.trace.every(natural))) return false;
+  if (!list(s.curses, 8) || !s.curses.every(key => has(CURSES, key)) || new Set(s.curses).size !== s.curses.length) return false;
+  if (s.route !== null && !(record(s.route) && number(s.route.expires) && list(s.route.options, 2)
+    && s.route.options.length === 2 && s.route.options.every(key => has(ROUTES, key)))) return false;
+  if (s.path !== null && !(record(s.path) && has(ROUTES, s.path.key) && number(s.path.until))) return false;
   if (s.daily !== null && !(typeof s.daily === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.daily))) return false;
   return Number.isSafeInteger(s.rngState) && s.rngState >= 0 && s.rngState <= 0xFFFFFFFF;
 }
@@ -193,7 +200,9 @@ function upgradeFittedState(state) {
 
 // Saves from before bargains, run statistics and the daily challenge.
 function addRunExtras(state) {
-  if (!record(state) || state.stats !== undefined) return state;
+  if (!record(state)) return state;
+  if (state.curses === undefined) state = { ...state, curses: [], route: null, path: null };
+  if (state.stats !== undefined) return state;
   const time = Number.isFinite(state.time) ? state.time : 0;
   return {
     ...state, bargain: null, boon: null, lastBargain: null, daily: null, rngState: 0,

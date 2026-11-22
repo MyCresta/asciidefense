@@ -1,6 +1,6 @@
-import { $, element, pad, setText } from './ui.js?v=3.2.0';
-import { foundry, openCache, workshopCosts } from './workshop.js?v=3.2.0';
-import { WEAPONS, MOUNT_OUTPUT, mountStats, mountTitle } from './weapons.js?v=3.2.0';
+import { $, element, pad, setText } from './ui.js?v=3.3.0';
+import { foundry, openCache, workshopCosts } from './workshop.js?v=3.3.0';
+import { WEAPONS, MOUNT_OUTPUT, mountStats, mountTitle } from './weapons.js?v=3.3.0';
 
 const SERVICES = {
   caches: { name: 'Salvage cache', icon: '  ____ \n /___/|\n |___|/' },
@@ -73,7 +73,7 @@ export function workbench(game, {changed}) {
         continue;
       }
       if (mount) {
-        const stats = mountStats(mount);
+        const stats = mountStats(mount, game);
         setText(fitted.icon, WEAPONS[mount.key].icon); setText(fitted.name, mountTitle(mount));
         setText(fitted.detail, place + ' / ' + share + ' / ' + (game.rate * stats.cadence).toFixed(2) + '/s');
         setText(fitted.action, meter(mount, stats, game));

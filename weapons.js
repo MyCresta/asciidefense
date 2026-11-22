@@ -52,9 +52,34 @@ export const TRAITS = {
   forked: { name: 'Forked', description: 'Each hit chains to one more enemy.', chains: 1 }
 };
 
+// A weapon trait plus the matching relic forms a combo.
+export const WEAPON_COMBOS = {
+  firestorm: { name: 'Firestorm', trait: 'searing', power: 'ember', description: 'Burning enemies spread fire when they die.' },
+  stormcell: { name: 'Storm cell', trait: 'forked', power: 'tesla', description: 'Forked weapons chain twice more.' },
+  hairtrigger: { name: 'Hair trigger', trait: 'rapid', power: 'overclock', description: 'Rapid weapons fire 15% faster again.' }
+};
+
+export function weaponComboActive(game, key) {
+  const combo = WEAPON_COMBOS[key];
+  return Boolean(combo && game.powers?.[combo.power] && game.armory?.mounts.some(mount => mount.trait === combo.trait));
+}
+
+const comboFor = (game, trait) => Object.keys(WEAPON_COMBOS).find(key => WEAPON_COMBOS[key].trait === trait && weaponComboActive(game, key));
+
+// Fire spreads from a burning enemy that dies while Firestorm is active.
+export function spreadFire(game, fallen) {
+  if (!(fallen.burnUntil > game.time) || !weaponComboActive(game, 'firestorm')) return;
+  for (const enemy of game.enemies) {
+    if (enemy === fallen || enemy.hp <= 0 || Math.hypot(enemy.x - fallen.x, enemy.y - fallen.y) > 9) continue;
+    enemy.burnDps = Math.max(enemy.burnDps, fallen.burnDps);
+    enemy.burnUntil = game.time + 3;
+  }
+  game.effect(fallen.x, fallen.y, 'burn', 9);
+}
+
 const validMount = mount => mount && Object.hasOwn(WEAPONS, mount.key);
 
-export function mountStats(mount) {
+export function mountStats(mount, game = null) {
   const weapon = WEAPONS[mount.key];
   const trait = TRAITS[mount.trait] || {};
   const grade = Math.min(MAX_GRADE, Math.max(1, mount.grade || 1));
@@ -63,8 +88,17 @@ export function mountStats(mount) {
     cadence: weapon.cadence * (trait.cadence || 1),
     reach: weapon.reach * (trait.reach || 1),
     chains: (mount.key === 'coil' ? 2 : 0) + (trait.chains || 0),
-    burn: trait.burn || 0
+    burn: trait.burn || 0,
+    ...(game ? comboBoost(game, mount) : {})
   };
+}
+
+function comboBoost(game, mount) {
+  const base = mountStats(mount);
+  const combo = comboFor(game, mount.trait);
+  if (combo === 'stormcell') return { chains: base.chains + 2 };
+  if (combo === 'hairtrigger') return { cadence: base.cadence * 1.15 };
+  return {};
 }
 
 export function mountTitle(mount) {
@@ -151,7 +185,7 @@ export function fireMounts(game, dt) {
   for (const [slot, mount] of game.armory.mounts.entries()) {
     mount.cooldown = Math.max(0, mount.cooldown - dt);
     if (mount.cooldown > 0) continue;
-    const stats = mountStats(mount);
+    const stats = mountStats(mount, game);
     const reach = game.range * stats.reach;
     const focused = game.focusId && game.enemies.find(e => e.id === game.focusId && e.hp > 0 && Math.hypot(e.x, e.y) <= reach);
     const target = focused || game.nearest({x: 0, y: 0}, reach);

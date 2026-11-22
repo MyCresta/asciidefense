@@ -1,6 +1,7 @@
-import { UPGRADES } from './content.js?v=3.2.0';
-import { cost as relicCost } from './relic-effects.js?v=3.2.0';
-import { WEAPONS, MAX_GRADE, GRADE_NAMES, TRAITS, availableWeapons, rollWeapon, receiveWeapon, replaceWeapon, hardpointPrice, mountTitle } from './weapons.js?v=3.2.0';
+import { UPGRADES } from './content.js?v=3.3.0';
+import { cost as relicCost } from './relic-effects.js?v=3.3.0';
+import { CURSES, applyCurse, cursed } from './hazards.js?v=3.3.0';
+import { WEAPONS, MAX_GRADE, GRADE_NAMES, TRAITS, availableWeapons, rollWeapon, receiveWeapon, replaceWeapon, hardpointPrice, mountTitle } from './weapons.js?v=3.3.0';
 
 const GRADES = ['Standard', 'Refined', 'Masterwork'];
 const RESERVES = new Set(['scrap', 'prospect']);
@@ -27,8 +28,9 @@ export function validWorkshop(state, levels, time, status) {
   if (status === 'cache' && !state.offer.length) return false;
   if (!state.offer.length) return state.rerolls === 0;
   if (state.caches < 1 || new Set(state.offer.map(item => item?.key)).size !== 3) return false;
-  if (state.offer.some(item => item?.weapon !== undefined)) {
-    return state.offer.every(item => item && (item.weapon === undefined ? validBlueprint(item, levels) : validWeaponItem(item)));
+  if (state.offer.some(item => item?.weapon !== undefined || item?.curse !== undefined)) {
+    return state.offer.every(item => item && (item.weapon !== undefined ? validWeaponItem(item)
+      : item.curse !== undefined ? Object.hasOwn(CURSES, item.curse) && item.key === 'curse:' + item.curse : validBlueprint(item, levels)));
   }
   // Other rewards can advance an upgrade in a shelved offer. Its printed
   // grade stays intact; installation clamps the gain or pays salvage instead.
@@ -49,6 +51,18 @@ function validWeaponItem(item) {
 }
 
 const isWeapon = item => item?.weapon !== undefined;
+const isCurse = item => item?.curse !== undefined;
+
+// After three minutes a cache may hide one cursed card among its blueprints.
+function maybeCurse(game, offer) {
+  const open = Object.keys(CURSES).filter(key => !cursed(game, key));
+  if (game.time < 180 || !open.length || game.random() >= .1) return offer;
+  const curse = open[Math.min(open.length - 1, Math.floor(game.random() * open.length))];
+  const slots = offer.map((item, i) => isWeapon(item) ? -1 : i).filter(i => i >= 0);
+  const slot = slots[Math.min(slots.length - 1, Math.floor(game.random() * slots.length))];
+  offer[slot] = { key: 'curse:' + curse, curse, grade: 3 };
+  return offer;
+}
 
 function eligible(game) {
   return Object.keys(UPGRADES).filter(key => game.levels[key] < UPGRADES[key].maxLevel);
@@ -142,9 +156,9 @@ function rollOffer(game, previous = [], kind = 'mixed') {
     const weapon = rollWeapon(game, prior ? [prior.weapon] : []);
     const offer = [...blueprints];
     offer.splice(Math.floor(game.random() * 3), 0, weapon);
-    return offer;
+    return maybeCurse(game, offer);
   }
-  return rollBlueprints(game, previous);
+  return maybeCurse(game, rollBlueprints(game, previous));
 }
 
 function rollBlueprints(game, previous = []) {
@@ -167,6 +181,10 @@ function rollBlueprints(game, previous = []) {
 export function describeBlueprint(game, item) {
   const { key, grade } = item;
   const rarity = GRADES[grade - 1];
+  if (isCurse(item)) {
+    const curse = CURSES[item.curse];
+    return { name: curse.name, grade: 3, rarity: 'Cursed', description: curse.upside + '. ' + curse.downside + '.', effect: 'Lasts all run', curse: true, icon: '  .-.  \n (x x) \n  |=|  ' };
+  }
   if (isWeapon(item)) {
     const gun = WEAPONS[item.weapon], trait = TRAITS[item.trait];
     const mounts = game.armory.mounts;
@@ -222,6 +240,10 @@ export function pickBlueprint(game, key) {
   if (w.pending) return fitPending(game, key);
   const item = w.offer.find(choice => choice.key === key);
   if (!item) return false;
+  if (isCurse(item)) {
+    if (!applyCurse(game, item.curse)) game.scrap += salvageValue(game);
+    return finishCache(game);
+  }
   if (isWeapon(item)) {
     const result = receiveWeapon(game, item);
     if (result === 'full' && game.armory.mounts.some(mount => mount.key === item.weapon)) {
@@ -293,7 +315,7 @@ export function workshopCosts(game) {
   return {
     hardpoint: Number.isFinite(hardpointPrice(game)) ? price(hardpointPrice(game)) : Infinity,
     commission: remaining ? price(34 * 1.58 ** w.commissioned + 8 * w.commissioned) : Infinity,
-    repair: game.hp < game.maxHp ? price(24 + 9 * w.repairs + 3 * Math.floor(game.time / 50)) : Infinity,
+    repair: game.hp < game.maxHp ? price((24 + 9 * w.repairs + 3 * Math.floor(game.time / 50)) * (cursed(game, 'hunger') ? 2 : 1)) : Infinity,
     tune: price(32 + 10 * w.tunes + 4 * w.tunes ** 2),
     reroll: game.status === 'cache' && remaining > 3 ? price(14 * 1.9 ** w.rerolls + 2 * Math.floor(game.time / 70)) : Infinity
   };
@@ -304,7 +326,7 @@ export function rerollCache(game) {
   const price = workshopCosts(game).reroll;
   if (w.pending || !Number.isFinite(price) || game.scrap < price) return false;
   const kind = w.offer.every(isWeapon) ? 'arms' : w.offer.some(isWeapon) ? 'armed' : 'blueprints';
-  w.offer = kind === 'blueprints' ? rollBlueprints(game, w.offer) : rollOffer(game, w.offer, kind);
+  w.offer = kind === 'blueprints' ? maybeCurse(game, rollBlueprints(game, w.offer.filter(item => !isCurse(item)))) : rollOffer(game, w.offer.filter(item => !isCurse(item)), kind);
   w.rerolls++;
   game.scrap -= price;
   return true;
