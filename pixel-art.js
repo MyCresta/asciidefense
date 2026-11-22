@@ -218,6 +218,24 @@ export function pixelSpire(columns, lines, size = columns > 20 ? 'large' : 'smal
   return rows;
 }
 
+// A larger pixel portrait for the Inspector and the bestiary, read from the theme.
+export function paintPortrait(canvas, key, scale = 6) {
+  const grid = key === 'tower' ? pixelSpire(25, 13) : PIXEL_ENEMIES[key];
+  if (!grid) return;
+  const styles = getComputedStyle(document.documentElement);
+  const read = (name, fallback) => styles.getPropertyValue(name).trim() || fallback;
+  const palette = pixelPalette({
+    bg: read('--surface', read('--bg', '#090b09')), ink: read('--ink', '#e5e7df'),
+    accent: read('--accent', '#b5ed69'), muted: read('--muted', '#879083'),
+  });
+  palette.b = 'transparent';
+  canvas.width = grid[0].length * scale;
+  canvas.height = grid.length * scale;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  paintPixels(ctx, grid, palette, 0, 0, canvas.width, canvas.height);
+}
+
 const parsed = new Map();
 function rgb(color) {
   if (parsed.has(color)) return parsed.get(color);

@@ -22,6 +22,7 @@
           <button id="theme-button" aria-expanded="false" aria-controls="theme-menu" aria-label="Choose color theme"><span class="button-bracket">[</span><span class="theme-label">Theme: </span><strong id="theme-name">Terminal</strong> <span class="arrow">v</span><span class="button-bracket">]</span></button>
           <div id="theme-menu" class="popup frame" role="group" aria-label="Color themes" hidden></div>
         </div>
+        <button id="art-button" aria-label="Art style: ASCII" title="Switch art style"><span class="button-bracket">[</span><span class="theme-label">Art: </span><strong id="art-name">ASCII</strong><span class="button-bracket">]</span></button>
         <button id="sound" aria-pressed="false" aria-label="Enable sound"><span class="button-bracket">[</span>SFX <span id="sound-state">off</span><span class="button-bracket">]</span></button>
         <button id="pause"><span class="button-bracket">[</span><span id="pause-icon">II</span> <span id="pause-text">Pause</span><span class="button-bracket">]</span></button>
       </nav>
@@ -81,7 +82,7 @@
         <section class="frame inspector" aria-labelledby="inspect-title">
           <div class="section-head"><h2 id="inspect-title"><i aria-hidden="true">//</i> Inspector</h2><button id="inspect-action" class="scope-action" aria-haspopup="dialog">[ Build ]</button></div>
           <div class="entity-card">
-            <div class="portrait-area"><pre id="portrait" aria-hidden="true"></pre></div>
+            <div class="portrait-area"><pre id="portrait" aria-hidden="true"></pre><canvas id="portrait-pixel" aria-hidden="true"></canvas></div>
             <div class="entity-details">
               <span class="eyebrow" id="entity-class">FRIENDLY</span>
               <h3 id="entity-name">The Spire</h3>
