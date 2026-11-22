@@ -7,9 +7,9 @@
   <meta name="description" content="Defend the Last Spire in an endless, all-ASCII tower defense roguelike.">
   <title>Last Spire | ASCII Tower Defense</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="./style.css?v=3.0.0">
-  <link rel="stylesheet" href="./appearance.css?v=3.0.0">
-  <script type="module" src="./main.js?v=3.0.0"></script>
+  <link rel="stylesheet" href="./style.css?v=3.1.0">
+  <link rel="stylesheet" href="./appearance.css?v=3.1.0">
+  <script type="module" src="./main.js?v=3.1.0"></script>
 </head>
 <body>
   <main class="console">
@@ -51,7 +51,7 @@
               <h3 id="overlay-title"></h3>
               <div id="overlay-detail"></div>
               <button id="overlay-action" class="action-button"></button>
-              <button id="overlay-loadout" class="secondary-button">[ Change loadout ]</button>
+              <button id="overlay-loadout" class="secondary-button">[ Change doctrine ]</button>
             </div>
           </div>
         </div>
@@ -83,11 +83,7 @@
           <dl class="entity-stats" id="entity-stats"></dl>
         </section>
         <section class="frame upgrades" aria-labelledby="upgrade-title">
-          <div class="section-head"><h2 id="upgrade-title"><i aria-hidden="true">//</i> Workshop</h2><span id="available-scrap" class="balance">$25</span></div>
-          <div id="shop-tabs" class="switches" role="group" aria-label="Workshop sections">
-            <button data-group="salvage" aria-pressed="true">Salvage</button>
-            <button data-group="weapons" aria-pressed="false">Weapons <span id="mount-count">1/3</span></button>
-          </div>
+          <div class="section-head"><h2 id="upgrade-title"><i aria-hidden="true">//</i> Workshop</h2><span class="workshop-meta"><span id="mount-count" class="mount-count">ARMS 1/3</span> <span id="available-scrap" class="balance">$25</span></span></div>
           <div class="upgrade-list" id="upgrade-list"></div>
         </section>
       </aside>

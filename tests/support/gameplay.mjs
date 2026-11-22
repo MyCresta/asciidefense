@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { Game } from '../../engine.js';
 import { POWERS, UPGRADES } from '../../content.js';
 import { openCache, pickBlueprint, foundry, workshopCosts } from '../../workshop.js';
-import { equipWeapon, weaponCost } from '../../weapons.js';
 
 export const RECORDS_KEY = 'last-spire.records.v1';
 export const CHECKPOINT_KEY = 'last-spire.checkpoint.v3';
@@ -43,8 +42,14 @@ export const ordnance = {
 // schematics enemies actually drop. Fit dissimilar support weapons and buy
 // services from earned scrap. No free currency or rank grants in full runs.
 export function shop(game, build) {
+  const desired = build === precision ? ['bolt','lance','scatter'] : ['scatter','coil','lance'];
   if (game.workshop.caches && openCache(game) && game.status === 'cache') {
+    const held = game.armory.mounts.map(mount => mount.key);
     const value = card => {
+      if (card.weapon) {
+        const rank = desired.indexOf(card.weapon);
+        return held.includes(card.weapon) ? 50 : rank < 0 || held.length >= game.armory.slots ? -2 : 100 - rank;
+      }
       if (!(card.key in UPGRADES)) return -1;
       const upgrade = UPGRADES[card.key];
       return card.levels * build.weights[card.key] /
@@ -53,25 +58,19 @@ export function shop(game, build) {
     const [best] = [...game.workshop.offer].sort((a, b) => value(b) - value(a));
     const before = game.scrap, level = game.levels[best.key];
     assert.equal(pickBlueprint(game, best.key), true);
+    if (game.workshop.pending) assert.equal(pickBlueprint(game, 'fit:scrap'), true);
     if (best.key in UPGRADES) assert.ok(game.levels[best.key] > level);
     assert.ok(game.scrap >= before);
   }
-  const mounts = game.armory.mounts;
-  const desired = build === precision ? ['bolt','lance','scatter'] : ['scatter','coil','lance'];
-  if (game.time < 1 && mounts[0].key !== desired[0]) {
-    assert.equal(equipWeapon(game, desired[0], 0), true);
-  }
-  const nextSlot = mounts.length;
-  const weapon = desired[nextSlot];
-  if (weapon && !mounts.some(mount => mount.key === weapon) && game.scrap >= weaponCost(game, weapon, nextSlot)) {
-    equipWeapon(game, weapon, nextSlot);
-  }
+  const slots = game.armory.slots;
   const costs = workshopCosts(game);
-  if (game.hp < 0.6 * game.maxHp && game.scrap >= costs.repair) {
+  if (slots < 3 && game.scrap >= costs.hardpoint) {
+    foundry(game, 'hardpoint');
+  } else if (game.hp < 0.6 * game.maxHp && game.scrap >= costs.repair) {
     foundry(game, 'repair');
   } else if (game.scrap >= costs.tune) {
     foundry(game, 'tune');
-  } else if (game.scrap >= costs.commission && nextSlot === 3) {
+  } else if (game.scrap >= costs.commission && slots === 3) {
     foundry(game, 'commission');
   }
 }

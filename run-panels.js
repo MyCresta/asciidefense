@@ -1,9 +1,9 @@
-import { WEAPONS, MOUNT_OUTPUT, equipWeapon, weaponCost, mountPrice } from './weapons.js?v=3.0.0';
-import { workshopCosts, describeBlueprint, rerollCache, closeCache } from './workshop.js?v=3.0.0';
-import { BLUEPRINTS, DOCTRINES, ENEMIES, RUN_PROFILES, POWERS, SYNERGIES, UPGRADES } from './content.js?v=3.0.0';
-import { ENEMY_PORTRAITS } from './art.js?v=3.0.0';
-import { formatTime } from './engine.js?v=3.0.0';
-import { $, decorateFrame, drawStats, element, pad, setText, tierName } from './ui.js?v=3.0.0';
+import { WEAPONS, mountTitle } from './weapons.js?v=3.1.0';
+import { workshopCosts, describeBlueprint, rerollCache, closeCache, fitChoices, cancelFit } from './workshop.js?v=3.1.0';
+import { BLUEPRINTS, DOCTRINES, ENEMIES, RUN_PROFILES, POWERS, SYNERGIES, UPGRADES } from './content.js?v=3.1.0';
+import { ENEMY_PORTRAITS } from './art.js?v=3.1.0';
+import { formatTime } from './engine.js?v=3.1.0';
+import { $, decorateFrame, drawStats, element, pad, setText, tierName } from './ui.js?v=3.1.0';
 
 function entry(name, description, marker = '') {
   const row = element('li');
@@ -35,7 +35,7 @@ function buildView(parent, game) {
   hardware.classList.add('level-grid');
   for (const [i, mount] of game.armory.mounts.entries()) {
     const row = element('li');
-    row.append(element('span', '', WEAPONS[mount.key].name),element('b', '', i ? 'Aux ' + i : 'Primary'));
+    row.append(element('span', '', mountTitle(mount)),element('b', '', i ? 'Aux ' + i : 'Primary'));
     hardware.append(row);
   }
   const relicList = section(parent, 'Installed relics');
@@ -73,29 +73,6 @@ function logView(parent, game) {
   }
   parent.append(element('p', 'log-caption', 'RUN ' + pad(game.run,3) + '  /  LAST ' + game.log.length + ' EVENTS'),list);
 }
-function armoryView(parent, game, slot, install) {
-  const current = game.armory.mounts[slot]?.key;
-  const price = mountPrice(game,slot);
-  const info = (slot ? 'Auxiliary ' + slot : 'Primary') + ' / ' + Math.round(MOUNT_OUTPUT[slot] * 100) + '% output';
-  parent.append(element('p', 'mount-intro', info + '  //  $' + game.scrap + ' available'));
-  if (!price) parent.append(element('p','refit-hint','One free primary refit before 02:00.'));
-  const grid = element('div', 'armory-grid');
-  for (const [key, gun] of Object.entries(WEAPONS)) {
-    const card = element('button','draft-card armory-card frame');
-    const cost = weaponCost(game,key,slot);
-    const occupied = game.armory.mounts.some(m => m.key === key);
-    const sigil = element('pre','power-sigil',gun.icon);
-    sigil.setAttribute('aria-hidden','true');
-    const label = key === current ? '[ Installed ]' : occupied ? '[ In use ]' : cost ? '[ Fit $' + cost + ' ]' : '[ Fit free ]';
-    card.append(element('span','power-family',gun.role),sigil,element('strong','power-name',gun.name),element('span','power-effect',gun.description),element('span','draft-select',label));
-    card.disabled = occupied || !Number.isFinite(cost) || game.scrap < cost;
-    card.setAttribute('aria-label', gun.name + '. ' + gun.description + ' ' + label);
-    card.addEventListener('click',() => install(key,slot));
-    decorateFrame(card); grid.append(card);
-  }
-  parent.append(grid);
-}
-
 function recordsView(parent, game) {
   const kills = game.progress.totalKills;
   stats(parent, [['Longest survival', formatTime(Math.max(game.records.best, game.time))], ['Lifetime kills', kills], ['Runs launched', game.records.runs]]);
@@ -147,23 +124,9 @@ function loadoutView(parent, game, start) {
     });
     picker.append(button);
   }
-  const weaponLabel = element('label','weapon-label','Starting weapon');
-  const weapons = element('div','switches weapon-choices');
-  weapons.setAttribute('role','group'); weapons.setAttribute('aria-label','Starting weapon');
-  let primary = game.armory.mounts[0].key;
-  const description = element('p','loadout-description',WEAPONS[primary].description);
-  for (const [key,gun] of Object.entries(WEAPONS)) {
-    const b = element('button','',gun.name);
-    b.setAttribute('aria-pressed',String(key === primary));
-    b.addEventListener('click',() => {
-      primary = key;
-      for (const opt of weapons.children) opt.setAttribute('aria-pressed',String(opt === b));
-      setText(description,gun.description);
-    });
-    weapons.append(b);
-  }
-  launch.addEventListener('click', () => { if (chosen) start(chosen,primary); });
-  parent.append(picker, weaponLabel, weapons, description, note, launch);
+  const weaponNote = element('p','loadout-description','Your starting weapon is found at random. More weapons turn up in salvage caches.');
+  launch.addEventListener('click', () => { if (chosen) start(chosen); });
+  parent.append(picker, weaponNote, note, launch);
 }
 
 export function runPanels(game, { pick, start, refresh, changed }) {
@@ -171,14 +134,10 @@ export function runPanels(game, { pick, start, refresh, changed }) {
   const draft = $('draft-dialog');
   const cursor = $('ascii-cursor');
   let resumeOnClose = false;
-  let fitted = false;
   let draftSignature = '';
-  function showView(view, slot) {
+  function showView(view) {
     const body = $('dossier-content');
     body.replaceChildren();
-    const armory = view === 'armory';
-    $('dossier-tabs').hidden = armory;
-    setText($('dossier-title'),armory ? '// Weapon fitting' : '// Run dossier');
     body.tabIndex = view === 'log' ? 0 : -1;
     body.classList.toggle('log-view', view === 'log');
     for (const b of $('dossier-tabs').children) b.setAttribute('aria-pressed', String(view === b.dataset.view));
@@ -186,22 +145,17 @@ export function runPanels(game, { pick, start, refresh, changed }) {
     else if (view === 'bestiary') bestiaryView(body);
     else if (view === 'records') recordsView(body, game);
     else if (view === 'log') logView(body,game);
-    else if (armory) armoryView(body,game,slot,(key,index) => {
-      if (!equipWeapon(game,key,index)) return;
-      fitted = true;
-      dossier.close();
-    });
-    else loadoutView(body, game, (key, primary) => {
+    else loadoutView(body, game, key => {
       resumeOnClose = false;
       dossier.close();
-      start(key,primary);
+      start(key);
     });
     if (view === 'log') {
       body.focus({preventScroll:true});
       body.scrollTop = body.scrollHeight;
     } else body.scrollTop = 0;
   }
-  function showDossier(view = 'build', slot = 0) {
+  function showDossier(view = 'build') {
     if (game.status === 'draft' || game.status === 'cache') return;
     if (!dossier.open) {
       resumeOnClose = game.status === 'running';
@@ -209,7 +163,7 @@ export function runPanels(game, { pick, start, refresh, changed }) {
       dossier.showModal();
       dossier.append(cursor);
     }
-    showView(view,slot);
+    showView(view);
     refresh();
   }
   for (const b of $('dossier-tabs').children) b.addEventListener('click', () => showView(b.dataset.view));
@@ -218,17 +172,14 @@ export function runPanels(game, { pick, start, refresh, changed }) {
     document.body.append(cursor);
     if (resumeOnClose && game.status === 'paused') game.togglePause();
     resumeOnClose = false;
-    if (fitted) {
-      fitted = false;
-      changed();
-    } else refresh();
+    refresh();
   });
   dossier.addEventListener('click', e => {
     if (e.target !== dossier) return;
     const r = dossier.getBoundingClientRect();
     if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) dossier.close();
   });
-  function shelve() { if (closeCache(game)) changed(); }
+  function shelve() { cancelFit(game); if (closeCache(game)) changed(); }
   $('cache-shelve').addEventListener('click',shelve);
   $('cache-reroll').addEventListener('click',() => { if (rerollCache(game)) changed(); });
   draft.addEventListener('cancel', e => { e.preventDefault(); if (game.status === 'cache') shelve(); });
@@ -243,6 +194,8 @@ export function runPanels(game, { pick, start, refresh, changed }) {
       draftSignature = '';
       return;
     }
+    const pending = cache ? game.workshop.pending : null;
+    if (pending) return syncFit(pending);
     const offer = cache ? game.workshop.offer : null;
     const keys = cache ? offer.map(it => it.key) : game.choices;
     const sig = [game.status, game.draftReason, game.time, keys.join(), cache ? game.workshop.rerolls : ''].join(':');
@@ -252,9 +205,13 @@ export function runPanels(game, { pick, start, refresh, changed }) {
     const starter = game.draftReason === 'starter';
     const reason = cache ? 'SALVAGE CACHE' : boss ? 'SOVEREIGN SALVAGE' : starter ? 'STARTING RELIC' : 'TIMED DRAFT';
     setText($('draft-kicker'), reason + '  //  ' + formatTime(game.time));
-    setText($('draft-title'), cache ? 'Choose a blueprint' : starter ? 'Choose your first relic' : 'Choose a relic');
-    setText($('draft-prompt'), cache ? 'Install one blueprint from this cache.' : boss ? 'The Sovereign fell. Recover one effect for this run.' : 'Install one effect for this run.');
+    const arms = cache && offer.every(item => item.weapon);
+    if (arms) setText($('draft-kicker'), 'ARMS CACHE  //  ' + formatTime(game.time));
+    setText($('draft-title'), arms ? 'Choose a weapon' : cache && offer.some(item => item.weapon) ? 'Choose a blueprint or weapon' : cache ? 'Choose a blueprint' : starter ? 'Choose your first relic' : 'Choose a relic');
+    setText($('draft-prompt'), arms ? 'Fit one found weapon to your hardpoints.' : cache ? 'Install one blueprint from this cache.' : boss ? 'The Sovereign fell. Recover one effect for this run.' : 'Install one effect for this run.');
     $('cache-actions').hidden = !cache;
+    setText($('cache-shelve'), '[ Save for later ]');
+    $('cache-reroll').hidden = false;
     if (cache) {
       const cost = workshopCosts(game).reroll;
       setText($('cache-wallet'),'SCRAP $' + game.scrap);
@@ -263,13 +220,14 @@ export function runPanels(game, { pick, start, refresh, changed }) {
     }
     const cards = keys.map((key, i) => {
       const bp = cache ? describeBlueprint(game,offer[i]) : null;
-      const power = cache ? { ...bp, sigil: UPGRADES[key]?.icon || '  [*]  ', family: bp.rarity } : POWERS[key];
+      const power = cache ? { ...bp, sigil: bp.icon || UPGRADES[key]?.icon || '  [*]  ', family: bp.rarity } : POWERS[key];
       const rank = cache ? 1 : (game.powers[key] || 0) + 1;
       const card = element('button', 'draft-card frame');
-      const family = cache ? bp.rarity.toUpperCase() + ' / G' + bp.grade : (power.rarity !== 'common' ? power.rarity.toUpperCase() + ' / ' : '') + power.family.toUpperCase();
+      const family = bp?.weapon ? bp.role + ' / ' + bp.rarity.toUpperCase() + ' G' + bp.grade : cache ? bp.rarity.toUpperCase() + ' / G' + bp.grade : (power.rarity !== 'common' ? power.rarity.toUpperCase() + ' / ' : '') + power.family.toUpperCase();
       const sigil = element('pre', 'power-sigil', power.sigil);
       sigil.setAttribute('aria-hidden', 'true');
       const choose = element('span', 'draft-select', '[ ' + (i + 1) + ' ] Install');
+      if (bp?.weapon) card.classList.add('weapon-card');
       card.append(element('span','power-family',family),sigil,element('strong','power-name',power.name),element('span','power-effect',power.description),choose);
       if (cache) card.insertBefore(element('span','blueprint-gain',bp.effect),choose);
       const combo = cache ? Object.values(SYNERGIES).find(item => item.upgrade === key && game.powers[item.power] && game.levels[key] < item.level && game.levels[key] + offer[i].levels >= item.level) : Object.values(SYNERGIES).find(item => item.power === key);
@@ -283,6 +241,44 @@ export function runPanels(game, { pick, start, refresh, changed }) {
       if (rank > 1) choose.append(element('small','',' Rank ' + rank));
       card.setAttribute('aria-label', power.name + '. ' + power.description + (cache ? ' ' + bp.effect : '') + ' Press ' + (i + 1) + ' to install.');
       card.addEventListener('click', () => pick(key));
+      decorateFrame(card);
+      return card;
+    });
+    $('draft-choices').replaceChildren(...cards);
+    if (!draft.open) draft.showModal();
+    draft.append(cursor);
+    $('draft-title').focus();
+  }
+  // A found weapon with every hardpoint filled replaces one of them or is reclaimed.
+  function syncFit(pending) {
+    const choices = fitChoices(game);
+    const sig = ['fit', pending.weapon, game.scrap, choices.length].join(':');
+    if (draft.open && sig === draftSignature) return;
+    draftSignature = sig;
+    const found = mountTitle({ key: pending.weapon, grade: pending.grade, trait: pending.trait });
+    setText($('draft-kicker'), 'HARDPOINTS FULL  //  ' + formatTime(game.time));
+    setText($('draft-title'), 'Fit ' + found);
+    setText($('draft-prompt'), 'Choose the weapon it replaces, or reclaim it for scrap.');
+    $('cache-actions').hidden = false;
+    setText($('cache-wallet'),'SCRAP $' + game.scrap);
+    $('cache-reroll').hidden = true;
+    setText($('cache-shelve'), '[ Back ]');
+    const cards = choices.map((choice, i) => {
+      const card = element('button', 'draft-card frame fit-card');
+      const choose = element('span', 'draft-select', '[ ' + (i + 1) + ' ] ' + (choice.mount ? 'Replace' : 'Reclaim'));
+      if (choice.mount) {
+        const sigil = element('pre', 'power-sigil', WEAPONS[choice.mount.key].icon);
+        sigil.setAttribute('aria-hidden', 'true');
+        card.append(element('span','power-family',(choice.slot ? 'AUX ' + choice.slot : 'PRIMARY') + ' / FITTED'), sigil,
+          element('strong','power-name',mountTitle(choice.mount)), element('span','power-effect','Swap it for ' + found + '. The reload carries over.'), choose);
+      } else {
+        const sigil = element('pre', 'power-sigil', '  ____ \n /___/|\n |___|/');
+        sigil.setAttribute('aria-hidden', 'true');
+        card.append(element('span','power-family','SALVAGE'), sigil, element('strong','power-name','Reclaim it'),
+          element('span','power-effect','Keep your weapons and break ' + found + ' down for scrap.'), choose);
+      }
+      card.setAttribute('aria-label', (choice.mount ? 'Replace ' + mountTitle(choice.mount) : 'Reclaim ' + found + ' for scrap') + '. Press ' + (i + 1) + '.');
+      card.addEventListener('click', () => pick(choice.key));
       decorateFrame(card);
       return card;
     });

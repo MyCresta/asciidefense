@@ -1,5 +1,5 @@
-import { TOWER, TOWER_SMALL, ENEMY_ART } from './art.js?v=3.0.0';
-import { maxWeaponRange } from './weapons.js?v=3.0.0';
+import { TOWER, TOWER_SMALL, ENEMY_ART } from './art.js?v=3.1.0';
+import { maxWeaponRange } from './weapons.js?v=3.1.0';
 
 const FONT = '"Lucida Console", "Liberation Mono", "Courier New", monospace';
 const TAU = Math.PI * 2;

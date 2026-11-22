@@ -1,9 +1,9 @@
-import { ENEMIES, UPGRADES, POWERS, DOCTRINES, BLUEPRINTS, SYNERGIES, RUN_PROFILES } from './content.js?v=3.0.0';
-import { restoreCheckpoint, clearCheckpoint } from './checkpoint.js?v=3.0.0';
+import { ENEMIES, UPGRADES, POWERS, DOCTRINES, BLUEPRINTS, SYNERGIES, RUN_PROFILES } from './content.js?v=3.1.0';
+import { restoreCheckpoint, clearCheckpoint } from './checkpoint.js?v=3.1.0';
 
-import { createWorkshop, awardSalvage, pickBlueprint } from './workshop.js?v=3.0.0';
-import { initWeapons, WEAPONS, fireMounts } from './weapons.js?v=3.0.0';
-import * as Relics from './relic-effects.js?v=3.0.0';
+import { createWorkshop, awardSalvage, pickBlueprint } from './workshop.js?v=3.1.0';
+import { initWeapons, WEAPONS, fireMounts } from './weapons.js?v=3.1.0';
+import * as Relics from './relic-effects.js?v=3.1.0';
 
 export { ENEMIES, UPGRADES, POWERS, DOCTRINES, BLUEPRINTS, SYNERGIES, RUN_PROFILES };
 export const WORLD = Object.freeze({ x: 140, y: 84 });
@@ -87,8 +87,8 @@ export class Game {
     return Object.keys(DOCTRINES).filter(key => DOCTRINES[key].kills <= this.progress.totalKills);
   }
 
-  restart(doctrineKey = this.doctrine || 'sentinel', primaryWeapon = 'bolt') {
-    if (!this.availableDoctrines.includes(doctrineKey) || !Object.hasOwn(WEAPONS, primaryWeapon)) return false;
+  restart(doctrineKey = this.doctrine || 'sentinel', primaryWeapon = null) {
+    if (!this.availableDoctrines.includes(doctrineKey) || (primaryWeapon !== null && !Object.hasOwn(WEAPONS, primaryWeapon))) return false;
     clearCheckpoint(this);
     const profiles = Object.keys(RUN_PROFILES).filter(key => key !== this.records.lastProfile);
     // Reservoir sampling gives every available profile equal odds without retaining a shuffled deck.

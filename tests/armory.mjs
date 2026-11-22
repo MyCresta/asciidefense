@@ -1,35 +1,144 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { saveCheckpoint } from '../checkpoint.js';
-import { equipWeapon, weaponCost } from '../weapons.js';
-import { MemoryStorage, start } from './support/gameplay.mjs';
+import { WEAPONS, TRAITS, mountStats } from '../weapons.js';
+import { openCache, pickBlueprint, closeCache, foundry, workshopCosts, fitChoices } from '../workshop.js';
+import { CHECKPOINT_KEY, MemoryStorage, start } from './support/gameplay.mjs';
 
-test('each new run can pick its primary and pays for additional unique mounts', () => {
+const mount = (key, extra = {}) => ({ key, grade: 1, trait: null, cooldown: 0, ...extra });
+
+function openArmsCache(game) {
+  game.scrap = workshopCosts(game).hardpoint;
+  assert.equal(foundry(game, 'hardpoint'), true);
+  assert.equal(game.workshop.armsCaches, 1);
+  assert.equal(openCache(game), true);
+  assert.equal(game.status, 'cache');
+  return game.workshop.offer;
+}
+
+test('each run starts with one random, untraited weapon and no free choice', () => {
+  const starts = new Set();
+  for (let seed = 1; seed <= 40; seed++) {
+    const game = start(seed * 97);
+    assert.equal(game.armory.slots, 1);
+    assert.equal(game.armory.mounts.length, 1);
+    const [primary] = game.armory.mounts;
+    assert.ok(Object.hasOwn(WEAPONS, primary.key));
+    assert.equal(primary.grade, 1);
+    assert.equal(primary.trait, null);
+    starts.add(primary.key);
+  }
+  assert.ok(starts.size >= 3, 'Starting weapons should vary between runs');
+});
+
+test('a hardpoint purchase opens a slot and an arms cache of three distinct found weapons', () => {
   const storage = new MemoryStorage();
   const game = start(91, storage);
-  assert.equal(game.restart('sentinel', 'lance'), true);
-  assert.deepEqual(game.armory.mounts.map(m => m.key), ['lance']);
-  const wallet = game.scrap;
-  assert.equal(weaponCost(game, 'coil', 0), 0);
-  assert.equal(equipWeapon(game, 'coil', 0), true);
-  assert.equal(game.scrap, wallet);
-  assert.ok(game.armory.mounts[0].cooldown > 0);
-  assert.ok(weaponCost(game, 'bolt', 0) > 0);
-  assert.equal(equipWeapon(game, 'coil', 1), false);
-  assert.equal(equipWeapon(game, 'bolt', 2), false);
-  const price = weaponCost(game, 'bolt', 1);
-  game.scrap = price - 1;
-  assert.equal(equipWeapon(game, 'bolt', 1), false);
-  assert.deepEqual(game.armory.mounts.map(m => m.key), ['coil']);
-  game.scrap += 1;
-  assert.equal(equipWeapon(game, 'bolt', 1), true);
+  assert.equal(workshopCosts(game).hardpoint, 180);
+  const offer = openArmsCache(game);
   assert.equal(game.scrap, 0);
-  game.scrap = weaponCost(game, 'lance', 2);
-  assert.equal(equipWeapon(game, 'lance', 2), true);
-  assert.equal(equipWeapon(game, 'scatter', 3), false);
+  assert.equal(game.armory.slots, 2);
+  assert.equal(offer.length, 3);
+  assert.equal(new Set(offer.map(item => item.weapon)).size, 3);
+  for (const item of offer) {
+    assert.ok(Object.hasOwn(WEAPONS, item.weapon));
+    assert.ok(item.grade >= 1 && item.grade <= 3);
+    assert.ok(Object.hasOwn(TRAITS, item.trait));
+  }
   assert.equal(saveCheckpoint(game), true);
-  assert.deepEqual(start(7, storage, true).armory, game.armory);
-  assert.deepEqual(game.armory.mounts.map(m => m.key), ['coil', 'bolt', 'lance']);
+  assert.deepEqual(start(7, storage, true).workshop.offer, offer);
+  const fresh = offer.find(item => !game.armory.mounts.some(m => m.key === item.weapon));
+  assert.equal(pickBlueprint(game, fresh.key), true);
+  assert.equal(game.status, 'running');
+  assert.equal(game.armory.mounts.length, 2);
+  assert.deepEqual(game.armory.mounts[1], mount(fresh.weapon, { grade: fresh.grade, trait: fresh.trait }));
+  assert.equal(workshopCosts(game).hardpoint, 1100);
+  game.scrap = 1100;
+  assert.equal(foundry(game, 'hardpoint'), true);
+  assert.equal(workshopCosts(game).hardpoint, Infinity);
+  assert.equal(foundry(game, 'hardpoint'), false);
+});
+
+test('a duplicate find reinforces the held weapon and a masterwork duplicate is reclaimed', () => {
+  const game = start(55);
+  const key = game.armory.mounts[0].key;
+  game.workshop.caches = 1;
+  game.workshop.offer = [{ key: 'arm:' + key, weapon: key, grade: 1, trait: 'rapid' }, { key: 'scrap', grade: 1, levels: 1 }, { key: 'prospect', grade: 1, levels: 1 }];
+  assert.equal(openCache(game), true);
+  assert.equal(pickBlueprint(game, 'arm:' + key), true);
+  assert.deepEqual(game.armory.mounts[0], mount(key, { grade: 2, trait: 'rapid' }));
+  game.armory.mounts[0].grade = 3;
+  game.workshop.caches = 1;
+  game.workshop.offer = [{ key: 'arm:' + key, weapon: key, grade: 2, trait: 'long' }, { key: 'scrap', grade: 1, levels: 1 }, { key: 'prospect', grade: 1, levels: 1 }];
+  const scrap = game.scrap;
+  assert.equal(openCache(game), true);
+  assert.equal(pickBlueprint(game, 'arm:' + key), true);
+  assert.ok(game.scrap > scrap);
+  assert.equal(game.armory.mounts[0].trait, 'rapid');
+});
+
+test('a find with full hardpoints asks which weapon to replace and keeps its reload', () => {
+  const storage = new MemoryStorage();
+  const game = start(300, storage);
+  const held = game.armory.mounts[0].key;
+  const other = Object.keys(WEAPONS).find(key => key !== held);
+  game.armory.mounts[0].cooldown = 0.7;
+  game.workshop.caches = 1;
+  game.workshop.offer = [{ key: 'arm:' + other, weapon: other, grade: 2, trait: 'heavy' }, { key: 'scrap', grade: 1, levels: 1 }, { key: 'prospect', grade: 1, levels: 1 }];
+  assert.equal(openCache(game), true);
+  assert.equal(pickBlueprint(game, 'arm:' + other), true);
+  assert.equal(game.status, 'cache');
+  assert.deepEqual(fitChoices(game).map(choice => choice.key), ['fit:0', 'fit:scrap']);
+  assert.equal(saveCheckpoint(game), true);
+  assert.deepEqual(start(3, storage, true).workshop.pending, game.workshop.pending);
+  assert.equal(closeCache(game), true);
+  assert.equal(game.status, 'running');
+  game.workshop.pending = null;
+  assert.equal(openCache(game), true);
+  assert.equal(pickBlueprint(game, 'arm:' + other), true);
+  assert.equal(pickBlueprint(game, 'fit:0'), true);
+  assert.equal(game.status, 'running');
+  assert.equal(game.workshop.caches, 0);
+  assert.deepEqual(game.armory.mounts, [mount(other, { grade: 2, trait: 'heavy', cooldown: 0.7 })]);
+});
+
+test('grades and traits change the stats a mount fires with', () => {
+  const base = mountStats(mount('bolt'));
+  assert.ok(mountStats(mount('bolt', { grade: 3 })).scale > mountStats(mount('bolt', { grade: 2 })).scale);
+  assert.ok(mountStats(mount('bolt', { grade: 2 })).scale > base.scale);
+  assert.ok(mountStats(mount('bolt', { trait: 'rapid' })).cadence > base.cadence);
+  assert.ok(mountStats(mount('bolt', { trait: 'long' })).reach > base.reach);
+  const heavy = mountStats(mount('bolt', { trait: 'heavy' }));
+  assert.ok(heavy.scale > base.scale && heavy.cadence < base.cadence);
+  assert.equal(mountStats(mount('bolt', { trait: 'forked' })).chains, base.chains + 1);
+
+  const game = start(77);
+  game.armory.mounts = [mount('bolt', { trait: 'searing' })];
+  game.enemies = [];
+  const target = game.spawn('brute', 20, 0);
+  target.maxHp = target.hp = 1000;
+  game.update(1 / 60);
+  const afterShot = target.hp;
+  assert.ok(target.burnUntil > game.time);
+  game.armory.mounts[0].cooldown = 60;
+  game.update(0.5);
+  assert.ok(target.hp < afterShot, 'A searing hit keeps burning');
+});
+
+test('a sovereign cache always carries a found weapon', () => {
+  const game = start(12);
+  game.enemies = [];
+  game.workshop.dryKills = 0;
+  const boss = game.spawn('sovereign', 9, 0);
+  boss.hp = 1;
+  game.armory.mounts[0] = mount('bolt');
+  game.focus(boss.id);
+  game.update(0.05);
+  assert.ok(game.workshop.caches >= 1);
+  if (game.status === 'draft') game.pickPower(game.choices[0]);
+  if (game.status === 'draft') game.pickPower(game.choices[0]);
+  assert.equal(openCache(game), true);
+  assert.equal(game.workshop.offer.filter(item => item.weapon).length, 1);
 });
 
 test('weapon trajectories send the expected number of hits to distinct in-range enemies', () => {
@@ -40,7 +149,7 @@ test('weapon trajectories send the expected number of hits to distinct in-range 
   };
   for (const [key, positions] of Object.entries(geometry)) {
     const game = start(9983);
-    game.restart('sentinel', key);
+    game.armory.mounts = [mount(key)];
     game.enemies = [];
     const enemies = positions.map(([x, y]) => game.spawn('brute', x, y));
     game.focus(enemies[0].id);
@@ -57,10 +166,7 @@ test('the same bolt loses output on auxiliary mounts without sharing another mou
     const game = start(709);
     const loadout = ['coil', 'lance', 'scatter'];
     loadout[slot] = 'bolt';
-    game.restart('sentinel', loadout[0]);
-    game.scrap = 10000;
-    for (let i = 1; i < loadout.length; i++) assert.equal(equipWeapon(game, loadout[i], i), true);
-    game.armory.mounts.forEach((mount, index) => { mount.cooldown = index === slot ? 0 : 5; });
+    game.armory = { slots: 3, mounts: loadout.map((key, index) => mount(key, { cooldown: index === slot ? 0 : 5 })) };
     game.enemies = [];
     const target = game.spawn('brute', 20, 0);
     game.update(1 / 60);
@@ -70,18 +176,16 @@ test('the same bolt loses output on auxiliary mounts without sharing another mou
   assert.ok(damage[0] > damage[1] && damage[1] > damage[2] && damage[2] > 0);
 });
 
-test('an idle mount fires as soon as its own cooldown expires', () => {
-  const game = start(43);
-  game.scrap = weaponCost(game, 'lance', 1);
-  assert.equal(equipWeapon(game, 'lance', 1), true);
-  game.enemies = [];
-  const target = game.spawn('brute', 21, 0);
-  target.maxHp = target.hp = 500;
-  game.armory.mounts[0].cooldown = 0;
-  game.armory.mounts[1].cooldown = 0.4;
-  game.update(0.05);
-  assert.deepEqual(game.shots.map(shot => shot.kind), ['shot']);
-  game.update(0.4);
-  assert.deepEqual(game.shots.map(shot => shot.kind), ['lance']);
-  assert.ok(game.armory.mounts[0].cooldown > 0);
+test('a version 3 save keeps its fitted weapons as untraited standard finds', () => {
+  const storage = new MemoryStorage();
+  const game = start(43, storage);
+  assert.equal(saveCheckpoint(game), true);
+  const saved = JSON.parse(storage.getItem(CHECKPOINT_KEY));
+  const { armsCaches, weaponDue, pending, ...workshop } = saved.state.workshop;
+  saved.state.workshop = workshop;
+  saved.state.armory = { mounts: [{ key: 'lance', cooldown: 0.25 }, { key: 'bolt', cooldown: 0 }], refits: 1 };
+  storage.setItem(CHECKPOINT_KEY, JSON.stringify(saved));
+  const restored = start(5, storage, true);
+  assert.deepEqual(restored.armory, { slots: 2, mounts: [mount('lance', { cooldown: 0.25 }), mount('bolt')] });
+  assert.equal(restored.workshop.armsCaches, 0);
 });

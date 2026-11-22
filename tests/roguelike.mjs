@@ -279,6 +279,8 @@ test('a sovereign reaching the spire affects integrity and pays no kill or rare 
 function synergyEncounter(relic, upgrade, hasRelic, level) {
   const game = start(1013);
   game.enemies = [];
+  // Synergy geometry assumes the single-target bolt caster as the primary.
+  game.armory.mounts[0] = { key: 'bolt', grade: 1, trait: null, cooldown: 0 };
   game.levels[upgrade] = level;
   if (hasRelic) game.powers[relic] = 1;
   return game;

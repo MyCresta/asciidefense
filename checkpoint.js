@@ -1,8 +1,8 @@
 // Keep lifetime unlocks independent from the current run. Losing a checkpoint
 // (including when browser storage is full) must never reset the player's record.
-import { DOCTRINES, ENEMIES, POWERS, RUN_PROFILES, UPGRADES } from './content.js?v=3.0.0';
-import { WEAPONS } from './weapons.js?v=3.0.0';
-import { createWorkshop, validWorkshop } from './workshop.js?v=3.0.0';
+import { DOCTRINES, ENEMIES, POWERS, RUN_PROFILES, UPGRADES } from './content.js?v=3.1.0';
+import { WEAPONS, TRAITS, MAX_GRADE } from './weapons.js?v=3.1.0';
+import { createWorkshop, validWorkshop } from './workshop.js?v=3.1.0';
 
 const KEY = 'last-spire.checkpoint.v3';
 const LEGACY_KEY = 'last-spire.checkpoint.v2';
@@ -58,10 +58,13 @@ function visualEffect(effect) {
 }
 
 function validArmory(armory) {
-  if (!record(armory) || !natural(armory.refits) || !list(armory.mounts, 3) || !armory.mounts.length) return false;
+  if (!record(armory) || !Number.isInteger(armory.slots) || armory.slots < 1 || armory.slots > 3) return false;
+  if (!list(armory.mounts, armory.slots) || !armory.mounts.length) return false;
   const keys = new Set();
   for (const mount of armory.mounts) {
     if (!record(mount) || !has(WEAPONS, mount.key) || !number(mount.cooldown) || mount.cooldown < 0 || keys.has(mount.key)) return false;
+    if (!Number.isInteger(mount.grade) || mount.grade < 1 || mount.grade > MAX_GRADE) return false;
+    if (mount.trait !== null && !has(TRAITS, mount.trait)) return false;
     keys.add(mount.key);
   }
   return true;
@@ -152,8 +155,23 @@ function upgradeLegacyState(state) {
   return {
     ...state, profile: 'baseline', fuseUsed: false,
     draftHistory: [...state.choices], workshop: createWorkshop(),
-    armory: { mounts: [{ key: 'bolt', cooldown: state.gunClock }], refits: 0 }
+    armory: { slots: 1, mounts: [{ key: 'bolt', grade: 1, trait: null, cooldown: state.gunClock }] }
   };
+}
+
+// Version 3 saves chose and refitted weapons freely. Keep their fitted weapons
+// as standard, untraited finds on the same hardpoints.
+function upgradeFittedState(state) {
+  if (!record(state) || !record(state.armory) || !Array.isArray(state.armory.mounts) || !record(state.workshop)) return state;
+  const { armory, workshop } = state;
+  if (armory.slots === undefined && armory.refits !== undefined) {
+    state.armory = {
+      slots: armory.mounts.length,
+      mounts: armory.mounts.map(mount => record(mount) ? { key: mount.key, grade: 1, trait: null, cooldown: mount.cooldown } : mount)
+    };
+  }
+  if (workshop.armsCaches === undefined) state.workshop = { ...workshop, armsCaches: 0, weaponDue: 0, pending: null };
+  return state;
 }
 
 export function restoreCheckpoint(game) {
@@ -165,7 +183,7 @@ export function restoreCheckpoint(game) {
     if (raw === null) return false;
     const archive = raw.length <= MAX_CHARS ? JSON.parse(raw) : null;
     const supported = archive?.version === (legacy ? 2 : VERSION);
-    const state = supported && (legacy ? upgradeLegacyState(archive.state) : archive.state);
+    const state = supported && (legacy ? upgradeLegacyState(archive.state) : upgradeFittedState(archive.state));
     if (validState(state, game)) {
       // Only copy whitelisted data once the entire archive has passed validation.
       for (const key of RUN_FIELDS) game[key] = state[key];

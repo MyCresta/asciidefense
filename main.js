@@ -1,15 +1,15 @@
-import { SPEEDS, SimulationClock } from './clock.js?v=3.0.0';
-import { initAppearance } from './appearance.js?v=3.0.0';
-import { workbench } from './workbench-ui.js?v=3.0.0';
-import { pickBlueprint } from './workshop.js?v=3.0.0';
-import { WEAPONS, maxWeaponRange } from './weapons.js?v=3.0.0';
-import { Game, formatTime } from './engine.js?v=3.0.0';
-import { DOCTRINES, ENEMIES, POWERS, RUN_PROFILES, SYNERGIES } from './content.js?v=3.0.0';
-import { TITLE, PORTRAIT, ENEMY_PORTRAITS } from './art.js?v=3.0.0';
-import { Field } from './field.js?v=3.0.0';
-import { saveCheckpoint } from './checkpoint.js?v=3.0.0';
-import { runPanels } from './run-panels.js?v=3.0.0';
-import { $, pad, decorateFrame, drawStats, element, setText, tierName } from './ui.js?v=3.0.0';
+import { SPEEDS, SimulationClock } from './clock.js?v=3.1.0';
+import { initAppearance } from './appearance.js?v=3.1.0';
+import { workbench } from './workbench-ui.js?v=3.1.0';
+import { pickBlueprint, fitChoices } from './workshop.js?v=3.1.0';
+import { maxWeaponRange, mountStats, mountTitle } from './weapons.js?v=3.1.0';
+import { Game, formatTime } from './engine.js?v=3.1.0';
+import { DOCTRINES, ENEMIES, POWERS, RUN_PROFILES, SYNERGIES } from './content.js?v=3.1.0';
+import { TITLE, PORTRAIT, ENEMY_PORTRAITS } from './art.js?v=3.1.0';
+import { Field } from './field.js?v=3.1.0';
+import { saveCheckpoint } from './checkpoint.js?v=3.1.0';
+import { runPanels } from './run-panels.js?v=3.1.0';
+import { $, pad, decorateFrame, drawStats, element, setText, tierName } from './ui.js?v=3.1.0';
 
 const root = document.documentElement;
 function preference(key, fallback) {
@@ -49,7 +49,7 @@ root.style.setProperty('--rule', '"' + '-'.repeat(512) + '"');
 document.querySelectorAll('.frame').forEach(decorateFrame);
 
 const appearance = initAppearance({onChange: () => field.render(game.time)});
-const shop = workbench(game, {changed: commitAction, showMount: slot => panels.showDossier('armory', slot)});
+const shop = workbench(game, {changed: commitAction});
 function updateSpeed() {
   for (const button of $('speed-controls').children) {
     if (button.dataset.speed) button.setAttribute('aria-pressed',String(Number(button.dataset.speed) === speed));
@@ -126,14 +126,14 @@ function renderInspector() {
   const flags = enemy && [enemy.shield > 0 ? 'Shield ' + Math.ceil(enemy.shield) : '', enemy.burnUntil > game.time ? 'Burning' : '', enemy.slowUntil > game.time ? 'Slowed' : ''].filter(Boolean);
   const stats = enemy
     ? [['Integrity', Math.ceil(enemy.hp) + '/' + Math.ceil(enemy.maxHp)], ['Impact', enemy.damage + ' HP'], [flags.length ? 'Status' : 'Speed', flags.length ? flags.join(' / ') : concise(enemy.speed) + ' u/s'], ['Bounty', '$' + enemy.reward]]
-    : [['Damage', concise(game.damage) + ' HP'], ['Max reach', concise(maxWeaponRange(game)) + ' u'], ['Main rate', (game.rate * WEAPONS[game.armory.mounts[0].key].cadence).toFixed(2) + '/s'], ['Splash', game.splash ? concise(game.splash) + ' u' : 'Off']];
-  const signature = [enemy?.id || 'tower', enemy?.tier, game.doctrine, game.armory.mounts[0].key, game.focusId, JSON.stringify(stats)].join('/');
+    : [['Damage', concise(game.damage) + ' HP'], ['Max reach', concise(maxWeaponRange(game)) + ' u'], ['Main rate', (game.rate * mountStats(game.armory.mounts[0]).cadence).toFixed(2) + '/s'], ['Splash', game.splash ? concise(game.splash) + ' u' : 'Off']];
+  const signature = [enemy?.id || 'tower', enemy?.tier, game.doctrine, mountTitle(game.armory.mounts[0]), game.focusId, JSON.stringify(stats)].join('/');
   if (signature === inspectedSnapshot) return;
   inspectedSnapshot = signature;
   setText($('portrait'), (enemy ? ENEMY_PORTRAITS[enemy.type] : PORTRAIT).join('\n'));
   setText($('entity-class'), enemy ? (enemy.boss ? '[!] BOSS' : enemy.elite ? '[!] ELITE' : '[-] HOSTILE') : '[+] FRIENDLY');
   setText($('entity-name'), enemy ? type.name : 'The Spire');
-  setText($('entity-type'), enemy ? 'Tier ' + tierName(enemy.tier) + ' / ' + type.trait : WEAPONS[game.armory.mounts[0].key].name);
+  setText($('entity-type'), enemy ? 'Tier ' + tierName(enemy.tier) + ' / ' + type.trait : mountTitle(game.armory.mounts[0]));
   $('entity-type').title = type?.description || 'Prioritizes the closest hostile in range.';
   setText($('inspect-action'), enemy ? game.focusId === enemy.id ? '[ Release ]' : '[ Focus fire ]' : '[ Build ]');
   $('inspect-action').setAttribute('aria-haspopup', enemy ? 'false' : 'dialog');
@@ -239,10 +239,9 @@ function commitAction() {
   setText($('announcer'), game.log[0]?.text || '');
   refreshUI();
 }
-function restart(key, primary = game.armory.mounts[0].key) {
-  game.restart(key,primary);
+function restart(key) {
+  game.restart(key);
   selectTab(false);
-  shop.select('salvage');
   saveCheckpoint(game);
   refreshUI();
 }
@@ -286,10 +285,12 @@ document.querySelector('.feed').addEventListener('click',() => panels.showDossie
 document.addEventListener('keydown', event => {
   if (event.altKey || event.ctrlKey || event.metaKey || event.repeat || dialog.open || appearance.isOpen || event.defaultPrevented) return;
   if (game.status === 'draft' || game.status === 'cache') {
-    if (/^[1-3]$/.test(event.key)) {
+    if (/^[1-4]$/.test(event.key)) {
       event.preventDefault();
       const i = Number(event.key) - 1;
-      if (performance.now() - lastChoiceAt > 240) installRelic(game.status === 'cache' ? game.workshop.offer[i]?.key : game.choices[i]);
+      const cache = game.status === 'cache';
+      const keys = cache ? (game.workshop.pending ? fitChoices(game) : game.workshop.offer).map(item => item.key) : game.choices;
+      if (performance.now() - lastChoiceAt > 240) installRelic(keys[i]);
     }
     return;
   }
