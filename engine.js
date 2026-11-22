@@ -1,11 +1,11 @@
-import { ENEMIES, UPGRADES, POWERS, DOCTRINES, BLUEPRINTS, SYNERGIES, RUN_PROFILES } from './content.js?v=3.3.0';
-import { restoreCheckpoint, clearCheckpoint } from './checkpoint.js?v=3.3.0';
+import { ENEMIES, UPGRADES, POWERS, DOCTRINES, BLUEPRINTS, SYNERGIES, RUN_PROFILES } from './content.js?v=3.4.0';
+import { restoreCheckpoint, clearCheckpoint } from './checkpoint.js?v=3.4.0';
 
-import { createWorkshop, awardSalvage, pickBlueprint } from './workshop.js?v=3.3.0';
-import { initWeapons, WEAPONS, fireMounts, spreadFire } from './weapons.js?v=3.3.0';
-import * as Relics from './relic-effects.js?v=3.3.0';
-import { applyEliteTrait, boonActive, rollEliteTrait, tickBargains, BARGAIN_FIRST, cursed, offerRoute, routeActive, routeWeight, tickRoutes } from './hazards.js?v=3.3.0';
-import { applyPerks } from './perks.js?v=3.3.0';
+import { createWorkshop, awardSalvage, pickBlueprint } from './workshop.js?v=3.4.0';
+import { initWeapons, WEAPONS, fireMounts, spreadFire } from './weapons.js?v=3.4.0';
+import * as Relics from './relic-effects.js?v=3.4.0';
+import { applyEliteTrait, rollEliteTrait, cursed, offerRoute, routeActive, routeWeight, tickRoutes } from './hazards.js?v=3.4.0';
+import { applyPerks } from './perks.js?v=3.4.0';
 
 export { ENEMIES, UPGRADES, POWERS, DOCTRINES, BLUEPRINTS, SYNERGIES, RUN_PROFILES };
 export const WORLD = Object.freeze({ x: 140, y: 84 });
@@ -184,9 +184,8 @@ export class Game {
     this.gunClock = 0;
     this.spawnClock = 1.9;
     this.pulseAt = this.wardAt = 0;
-    this.bargain = this.boon = this.lastBargain = null;
-    this.nextBargain = BARGAIN_FIRST;
-    this.stats = { dealt: 0, bestHit: 0, taken: {}, fatal: null, bargains: 0, trace: [] };
+    this.draftReturn = 'running';
+    this.stats = { dealt: 0, bestHit: 0, taken: {}, fatal: null, trace: [] };
     this.curses = [];
     this.route = this.path = null;
     initWeapons(this, primaryWeapon);
@@ -207,7 +206,7 @@ export class Game {
   get range() { return Relics.stat(this, 'range', 37 + 4.5 * (this.levels.range - 1) + this.bonus.range + 12 * (this.powers.scope || 0)); }
   get rate() {
     const base = (.85 * 1.19 ** (this.levels.rate - 1) + this.bonus.rate) * (1 + .25 * (this.powers.overclock || 0));
-    return Relics.stat(this, 'rate', base * (1 + .02 * this.workshop.tunes)) * (boonActive(this, 'overdrive') ? 1.35 : 1) * (cursed(this, 'hunger') ? 1.25 : 1);
+    return Relics.stat(this, 'rate', base * (1 + .02 * this.workshop.tunes)) * (cursed(this, 'hunger') ? 1.25 : 1);
   }
   get damage() {
     const base = 8 + 2 * (this.levels.damage - 1) + this.bonus.damage + (this.powers.reactor || 0);
@@ -303,6 +302,8 @@ export class Game {
     if (opening) this.saveRecords(0, false, { openers: choices });
     this.choices = choices;
     this.draftReason = reason;
+    // A draft opened while paused returns to the pause once a relic is chosen.
+    if (this.status === 'running' || this.status === 'paused') this.draftReturn = this.status;
     this.status = 'draft';
   }
 
@@ -318,7 +319,7 @@ export class Game {
     this.noteSynergies(key);
     this.choices = [];
     this.draftReason = null;
-    this.status = 'running';
+    this.status = this.draftReturn === 'paused' ? 'paused' : 'running';
     if (this.queue.length) this.openDraft(this.queue.shift());
     return true;
   }
@@ -361,11 +362,9 @@ export class Game {
     let roll = this.random() * rows.reduce((sum, row) => sum + weight(row), 0);
     const { type } = rows.find(row => (roll -= weight(row)) < 0) || rows[rows.length - 1];
     const point = this.entryPoint();
-    const elite = boonActive(this, 'bloodprice')
-      ? this.random() < .35
-      : this.time >= 300 && this.random() < Math.min(.30, .07 + (this.time - 300) / 1800);
+    const elite = this.time >= 300 && this.random() < Math.min(.30, .07 + (this.time - 300) / 1800);
     this.spawn(type, point.x, point.y, { elite });
-    this.spawnClock += (boonActive(this, 'lull') ? 1 / .6 : 1) * this.encounter.interval * Math.max(.39, 2.7 / (1 + this.time / 95)) * (.70 + .60 * this.random());
+    this.spawnClock += this.encounter.interval * Math.max(.39, 2.7 / (1 + this.time / 95)) * (.70 + .60 * this.random());
   }
 
   scheduleBoss() {
@@ -402,7 +401,6 @@ export class Game {
     this.spawnClock -= dt;
     if (this.spawnClock <= 0) this.spawnContact();
     this.scheduleBoss();
-    tickBargains(this);
     tickRoutes(this);
     if (this.daily && this.time >= 30 * (this.stats.trace.length + 1)) this.stats.trace.push(this.kills);
     const threat = 1 + Math.floor(this.time / 45);
@@ -463,7 +461,6 @@ export class Game {
     let speed = enemy.speed * (this.time < enemy.slowUntil ? .65 : 1);
     if (enemy.type === 'wraith' && (this.time + enemy.phaseOffset) % 6.5 < 1.2) speed *= 2.1;
     if (enemy.type === 'moth' && gap < 32) speed *= 1.4;
-    if (boonActive(this, 'goldrush')) speed *= 1.25;
     speed = Relics.speed(this, enemy, speed);
     const factor = gap > 0 ? Math.max(0, gap - speed * dt) / gap : 0;
     enemy.x *= factor;
@@ -583,9 +580,8 @@ export class Game {
 
   rewardKill(enemy) {
     const base = Math.round(enemy.reward * this.encounter.salvage * (1 + this.bounty)) + (this.powers.harvest || 0);
-    const boon = (boonActive(this, 'lull') ? 0 : boonActive(this, 'goldrush') ? 1.6 : 1)
-      * (cursed(this, 'greed') ? 1.5 : 1) * (routeActive(this, 'convoy') ? 1.25 : 1);
-    const bounty = Math.round(Relics.bounty(this, enemy, base) * boon);
+    const payout = (cursed(this, 'greed') ? 1.5 : 1) * (routeActive(this, 'convoy') ? 1.25 : 1);
+    const bounty = Math.round(Relics.bounty(this, enemy, base) * payout);
     this.scrap += bounty;
     this.effect(enemy.x, enemy.y, 'kill', 2.5);
     this.note(`${ENEMIES[enemy.type].name} destroyed. +${bounty} scrap.`, 'kill');
@@ -651,8 +647,7 @@ export class Game {
       this.note('Phase ward absorbed an impact.', 'system');
       return;
     }
-    const overdrive = boonActive(this, 'overdrive') ? 1.5 : 1;
-    const damage = Math.max(1, Math.round(((siegeDamage || enemy.damage) - this.armor) * overdrive));
+    const damage = Math.max(1, Math.round((siegeDamage || enemy.damage) - this.armor));
     const applied = Relics.impact(this, enemy, damage);
     this.hp = Math.min(this.maxHp, Math.max(0, this.hp - applied));
     if (this.stats && applied > 0) {

@@ -1,10 +1,10 @@
-import { WEAPONS, WEAPON_COMBOS, mountTitle } from './weapons.js?v=3.3.0';
-import { PERKS, buyPerk, perkBank, readPerks } from './perks.js?v=3.3.0';
-import { workshopCosts, describeBlueprint, rerollCache, closeCache, fitChoices, cancelFit } from './workshop.js?v=3.3.0';
-import { BLUEPRINTS, DOCTRINES, ENEMIES, RUN_PROFILES, POWERS, SYNERGIES, UPGRADES } from './content.js?v=3.3.0';
-import { ENEMY_PORTRAITS } from './art.js?v=3.3.0';
-import { formatTime } from './engine.js?v=3.3.0';
-import { $, decorateFrame, drawStats, element, pad, setText, tierName } from './ui.js?v=3.3.0';
+import { WEAPONS, WEAPON_COMBOS, mountTitle } from './weapons.js?v=3.4.0';
+import { PERKS, buyPerk, perkBank, readPerks } from './perks.js?v=3.4.0';
+import { workshopCosts, describeBlueprint, rerollCache, closeCache, fitChoices, cancelFit } from './workshop.js?v=3.4.0';
+import { BLUEPRINTS, ENEMIES, RUN_PROFILES, POWERS, SYNERGIES, UPGRADES } from './content.js?v=3.4.0';
+import { ENEMY_PORTRAITS } from './art.js?v=3.4.0';
+import { formatTime } from './engine.js?v=3.4.0';
+import { $, decorateFrame, drawStats, element, pad, setText, tierName } from './ui.js?v=3.4.0';
 
 function entry(name, description, marker = '') {
   const row = element('li');
@@ -27,7 +27,7 @@ function stats(parent, values) {
 
 function buildView(parent, game) {
   stats(parent, [
-    ['Doctrine', DOCTRINES[game.doctrine].name], ['Run', pad(game.run, 3)],
+    ['Run', pad(game.run, 3)],
     ['Survival', formatTime(game.time)], ['Sovereigns defeated', game.bossKills]
   ]);
   const profile = RUN_PROFILES[game.profile];
@@ -108,37 +108,17 @@ function bestiaryView(parent) {
   }
 }
 
+// New run: a plain start, the daily challenge and the perk shop. Every run uses the same rules.
 function loadoutView(parent, game, start) {
-  const picker = element('div', 'loadout-picker');
-  const note = element('p', 'loadout-note', 'Select a doctrine for your next run.');
+  const live = game.status !== 'over';
+  const note = element('p', 'loadout-note', live ? 'This ends run ' + pad(game.run, 3) + '.' : 'Lifetime unlocks carry over.');
   const launch = element('button', 'launch-button', '[ Start new run ]');
-  launch.disabled = true;
-  let chosen;
-  for (const [key, doctrine] of Object.entries(DOCTRINES)) {
-    const available = game.progress.totalKills >= doctrine.kills;
-    const button = element('button', 'loadout');
-    button.disabled = !available;
-    button.setAttribute('aria-pressed', 'false');
-    const header = element('span', 'loadout-name');
-    header.append(element('b', '', doctrine.name), element('small', '', available ? (key === game.doctrine ? 'EQUIPPED' : 'UNLOCKED') : doctrine.kills + ' KILLS'));
-    button.append(header, element('span', 'loadout-description', doctrine.description));
-    button.addEventListener('click', () => {
-      chosen = key;
-      for (const option of picker.children) option.setAttribute('aria-pressed', String(option === button));
-      const live = game.status !== 'over';
-      setText(note, live ? 'Starting a new run will end run ' + pad(game.run, 3) + '. Lifetime unlocks are kept.' : 'Lifetime unlocks carry over to your next run.');
-      setText(launch, '[ Launch ' + doctrine.name + ' ]');
-      launch.disabled = false;
-    });
-    picker.append(button);
-  }
-  const weaponNote = element('p','loadout-description','Your starting weapon is random.');
-  launch.addEventListener('click', () => { if (chosen) start(chosen); });
+  launch.addEventListener('click', () => start('sentinel'));
   const record = game.dailyRecord;
   const daily = element('button', 'daily-button');
   daily.append(element('b', '', '[ Daily challenge ' + record.date + ' ]'),
     element('small', '', 'The same run for everyone today. Best: ' + (record.best ? formatTime(record.best) : '--:--')));
-  daily.addEventListener('click', () => start(chosen || game.doctrine, { daily: true }));
+  daily.addEventListener('click', () => start('sentinel', { daily: true }));
   const shop = element('div', 'perk-shop');
   function drawShop() {
     const owned = readPerks(game.storage).owned;
@@ -154,7 +134,7 @@ function loadoutView(parent, game, start) {
     shop.replaceChildren(element('h3', '', 'Perks  /  ' + bank + ' kills to spend'), ...rows);
   }
   drawShop();
-  parent.append(picker, weaponNote, note, launch, daily, shop);
+  parent.append(note, launch, daily, shop);
 }
 
 export function runPanels(game, { pick, start, refresh, changed }) {
