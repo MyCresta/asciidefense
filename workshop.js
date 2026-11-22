@@ -1,7 +1,7 @@
-import { UPGRADES } from './content.js?v=3.5.0';
-import { cost as relicCost } from './relic-effects.js?v=3.5.0';
-import { CURSES, applyCurse, cursed } from './hazards.js?v=3.5.0';
-import { WEAPONS, MAX_GRADE, GRADE_NAMES, TRAITS, availableWeapons, rollWeapon, receiveWeapon, replaceWeapon, forgePrice, mountTitle } from './weapons.js?v=3.5.0';
+import { UPGRADES } from './content.js?v=3.6.0';
+import { cost as relicCost } from './relic-effects.js?v=3.6.0';
+import { CURSES, applyCurse, cursed } from './hazards.js?v=3.6.0';
+import { WEAPONS, MAX_GRADE, GRADE_NAMES, TRAITS, availableWeapons, rollWeapon, receiveWeapon, replaceWeapon, forgePrice, mountTitle } from './weapons.js?v=3.6.0';
 
 const GRADES = ['Standard', 'Refined', 'Masterwork'];
 const RESERVES = new Set(['scrap', 'prospect']);
@@ -140,6 +140,7 @@ export function smallCache(game) {
     const value = Math.ceil(salvageValue(game) / 2);
     game.scrap += value;
     game.note(`Small cache: +${value} scrap.`, 'upgrade');
+    game.effect(0, 0, 'gain', 1, 1.8, '+$' + value);
     return 'scrap';
   }
   const key = keys[Math.min(keys.length - 1, Math.floor(game.random() * keys.length))];
@@ -147,6 +148,8 @@ export function smallCache(game) {
   const gain = Math.min(game.random() < .2 ? 2 : 1, UPGRADES[key].maxLevel - from);
   game.levels[key] = from + gain;
   game.note(`Small cache: ${UPGRADES[key].label} Lv.${from + gain}.`, 'upgrade');
+  const stacked = game.effects.filter(effect => effect.type === 'gain').length;
+  game.effect(0, 0, 'gain', 1 + stacked, 1.8, '+' + UPGRADES[key].label + ' ' + (from + gain));
   game.noteSynergies?.(key, from);
   return key;
 }

@@ -1,12 +1,12 @@
-import { TOWER, TOWER_SMALL, ENEMY_ART } from './art.js?v=3.5.0';
-import { ELITE_TRAITS } from './hazards.js?v=3.5.0';
-import { maxWeaponRange } from './weapons.js?v=3.5.0';
+import { TOWER, TOWER_SMALL, ENEMY_ART } from './art.js?v=3.6.0';
+import { ELITE_TRAITS } from './hazards.js?v=3.6.0';
+import { maxWeaponRange } from './weapons.js?v=3.6.0';
 
 const FONT = '"Lucida Console", "Liberation Mono", "Courier New", monospace';
 const TAU = Math.PI * 2;
 const HALF_WORLD_WIDTH = 140;
 const HALF_WORLD_HEIGHT = 84;
-const TOWER_ANCHOR = .72;
+const TOWER_ANCHOR = .5;
 const MOUNT_MARKS = { bolt: '+', scatter: ':', lance: '=', coil: '~', mortar: 'o', cryo: '*' };
 const REDUCED_MOTION = globalThis.matchMedia ? matchMedia('(prefers-reduced-motion: reduce)') : { matches: true };
 const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
@@ -56,7 +56,7 @@ function makeSprite(rows, lineHeight, ratio, colors, tower = false) {
       const char = line[col] || ' ';
       let color = colors.ink;
       if (tower) {
-        if (char === '*' || char === '@' || (row < 2 && char === '#')) color = colors.accent;
+        if (char === '*' || char === '@') color = colors.accent;
         else if (char === '.' || char === ':' || char === ';' || char === "'") color = colors.muted;
       } else if (/[oO@*]/.test(char)) color = colors.accent;
       if (color !== previous || col === end) {
@@ -384,8 +384,9 @@ export class Field {
   mountPoint(slot) {
     const { ox, oy } = this.geometry;
     const { width, height } = this.tower;
-    if (slot <= 0) return { x: ox, y: oy - height * .31 };
-    return { x: ox + width * (slot === 1 ? -.25 : .30), y: oy - height * .13 };
+    // Primary fires from the core; extra weapons sit on the side pylons.
+    if (slot <= 0) return { x: ox, y: oy - height * .08 };
+    return { x: ox + width * (slot === 1 ? -.42 : .42), y: oy };
   }
 
   paintTower() {
@@ -544,6 +545,13 @@ export class Field {
         case 'cache':
           ctx.fillText('[+] CACHE', clamp(p.x, 27, this.w - 27), Math.max(7, p.y - 8 - phase * 16));
           break;
+        case 'gain': {
+          // A small cache names the upgrade it installed, rising off the Spire.
+          ctx.font = `bold 12px ${FONT}`;
+          const top = g.oy - this.tower.height / 2;
+          ctx.fillText(String(effect.value ?? ''), clamp(p.x, 60, this.w - 60), Math.max(8, top - 8 - (radius - 1) * 13 - phase * 16));
+          break;
+        }
         case 'heal':
           for (let i = 0; i < 3; i++) ctx.fillText('+', p.x + (i - 1) * 7, p.y - 3 - phase * 14 - (i % 2) * 6);
           break;
