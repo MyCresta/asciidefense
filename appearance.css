@@ -35,6 +35,14 @@
   --bg:#211826; --surface:#261c2d; --ink:#ffe1c5; --muted:#c0a0b7;
   --faint:#5d455f; --line:#846480; --accent:#ffc880; --wash:#38283c;
 }
+:is(:root,.theme-swatch)[data-theme=signal] {
+  --bg:#0b1220; --surface:#0f1729; --ink:#f2f5fa; --muted:#a9b6cc;
+  --faint:#34425c; --line:#53637f; --accent:#ffb000; --wash:#1b2740;
+}
+:is(:root,.theme-swatch)[data-theme=contrast] {
+  --bg:#000; --surface:#000; --ink:#fff; --muted:#c8c8c8;
+  --faint:#5a5a5a; --line:#8a8a8a; --accent:#5cc8ff; --wash:#1a1a1a;
+}
 
 /* The frame supplies the character border. The popup supplies positioning. */
 .masthead { position:relative; z-index:5; }

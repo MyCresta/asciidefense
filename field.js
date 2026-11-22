@@ -1,12 +1,14 @@
-import { TOWER, TOWER_SMALL, ENEMY_ART } from './art.js?v=3.0.0';
-import { maxWeaponRange } from './weapons.js?v=3.0.0';
+import { TOWER, TOWER_SMALL, ENEMY_ART } from './art.js?v=3.3.0';
+import { ELITE_TRAITS } from './hazards.js?v=3.3.0';
+import { maxWeaponRange } from './weapons.js?v=3.3.0';
 
 const FONT = '"Lucida Console", "Liberation Mono", "Courier New", monospace';
 const TAU = Math.PI * 2;
 const HALF_WORLD_WIDTH = 140;
 const HALF_WORLD_HEIGHT = 84;
 const TOWER_ANCHOR = .72;
-const MOUNT_MARKS = { bolt: '+', scatter: ':', lance: '=', coil: '~' };
+const MOUNT_MARKS = { bolt: '+', scatter: ':', lance: '=', coil: '~', mortar: 'o', cryo: '*' };
+const REDUCED_MOTION = globalThis.matchMedia ? matchMedia('(prefers-reduced-motion: reduce)') : { matches: true };
 const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 
 function randomSequence(seed) {
@@ -82,6 +84,8 @@ export class Field {
     this.localPointer = null;
     this.hover = null;
     this.showRange = true;
+    this.showNumbers = true;
+    this.shake = 0;
     this.hitList = [];
     this.dirty = true;
     this.colorsDirty = true;
@@ -321,8 +325,17 @@ export class Field {
     const half = sprite.width * .5;
     const focused = this.game.focusId === enemy.id;
     const active = focused || this.game.selected === enemy.id || this.hover === enemy.id || this.keyTarget === enemy.id;
+    const flash = this.game.time - enemy.lastHit < .09;
+    if (flash) ctx.globalAlpha = .45;
     this.paintImage(sprite, x, y);
+    ctx.globalAlpha = 1;
     this.hitList.push({ x, y, sprite, id: enemy.id });
+    if (flash && this.showNumbers) {
+      ctx.fillStyle = colors.ink;
+      ctx.font = `bold 9px ${FONT}`;
+      ctx.textAlign = 'center';
+      ctx.fillText('x', p.x + (seed % 2 ? 3 : -3), p.y + bob);
+    }
     ctx.fillStyle = colors.accent;
     ctx.textAlign = 'center';
     if (enemy.shield > 0) {
@@ -340,12 +353,14 @@ export class Field {
     }
     ctx.font = `bold 9px ${FONT}`;
     if (enemy.boss) {
-      ctx.fillText('[ SOVEREIGN ]', clamp(p.x, 38, this.w - 38), Math.max(6, y - 5));
+      const rank = enemy.rank > 1 ? ' ' + ['', 'I', 'II', 'III', 'IV', 'V'][Math.min(5, enemy.rank)] : '';
+      ctx.fillText('[ SOVEREIGN' + rank + ' ]', clamp(p.x, 38, this.w - 38), Math.max(6, y - 5));
     } else if (active) {
-      const label = (enemy.elite ? '! ' : '') + 'T' + (enemy.tier || 1);
+      const trait = ELITE_TRAITS[enemy.trait];
+      const label = (trait ? trait.name.toUpperCase() + ' ' : enemy.elite ? '! ' : '') + 'T' + (enemy.tier || 1);
       ctx.fillText(label, p.x, y - 5);
     } else if (enemy.elite) {
-      ctx.fillText('!', p.x + half - 1, y);
+      ctx.fillText('!' + (ELITE_TRAITS[enemy.trait]?.mark || ''), p.x + half - 1, y);
     }
     if (enemy.burnUntil > this.game.time || enemy.slowUntil > this.game.time) {
       const burning = enemy.burnUntil > this.game.time;
@@ -546,6 +561,23 @@ export class Field {
         case 'crit':
           ctx.fillText('*!', p.x + 7, p.y - 8 - phase * 9);
           break;
+        case 'number':
+        case 'number-crit': {
+          if (!this.showNumbers) break;
+          const crit = effect.type === 'number-crit';
+          ctx.fillStyle = crit ? colors.accent : colors.ink;
+          ctx.font = `bold ${crit ? 12 : 9}px ${FONT}`;
+          ctx.fillText(String(effect.value ?? '') + (crit ? '!' : ''), p.x + 10, p.y - 10 - phase * 14);
+          break;
+        }
+        case 'chill':
+          this.burst(p, rx * (.4 + phase * .6), ry * (.4 + phase * .6), 10, '*~.');
+          break;
+        case 'hit':
+          this.shake = Math.max(this.shake || 0, life);
+          ctx.fillStyle = colors.ink;
+          this.burst(p, Math.max(12, rx) * phase, Math.max(9, ry) * phase, 5, '*.', .41);
+          break;
         case 'boss':
         case 'bossfall': {
           const fallen = effect.type === 'bossfall';
@@ -589,7 +621,15 @@ export class Field {
   render(timeSeconds = 0) {
     if ((this.dirty || this.colorsDirty || this.ratio !== Math.min(window.devicePixelRatio || 1, 3)) && !this.prepare()) return;
     const { ctx, w, h, game } = this;
+    ctx.setTransform(this.ratio, 0, 0, this.ratio, 0, 0);
     ctx.clearRect(0, 0, w, h);
+    // A core hit shakes the view briefly. Reduced-motion settings keep it still.
+    const shaking = this.shake > 0 && !REDUCED_MOTION.matches;
+    if (shaking) {
+      const size = 3.5 * this.shake;
+      ctx.translate((Math.random() - .5) * 2 * size, (Math.random() - .5) * 2 * size);
+    }
+    this.shake = 0;
     this.paintImage(this.terrain);
     if (this.showRange) this.paintImage(this.rangeLayer());
     this.hitList.length = 0;
