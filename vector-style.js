@@ -1,6 +1,6 @@
-import { AsciiStyle, surface } from './ascii-style.js?v=3.10.0';
-import { pixelPalette } from './pixel-art.js?v=3.10.0';
-import { VECTOR_ENEMIES, vectorSpire, paintVector } from './vector-art.js?v=3.10.0';
+import { AsciiStyle, surface } from './ascii-style.js?v=3.11.0';
+import { pixelPalette } from './pixel-art.js?v=3.11.0';
+import { VECTOR_ENEMIES, vectorSpire, paintVector } from './vector-art.js?v=3.11.0';
 
 export const VECTOR_FONT = '"Spire Vector", "Spire ASCII", sans-serif';
 

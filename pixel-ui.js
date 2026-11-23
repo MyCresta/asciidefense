@@ -1,10 +1,10 @@
-import { GLYPHS, FALLBACK } from './pixel-style.js?v=3.10.0';
-import { STROKES, DOTS } from './vector-style.js?v=3.10.0';
-import { POWERS, UPGRADES } from './content.js?v=3.10.0';
-import { WEAPONS } from './weapons.js?v=3.10.0';
-import { CURSE_ICON } from './workshop.js?v=3.10.0';
-import { SERVICES, EMPTY_ICON } from './workbench-ui.js?v=3.10.0';
-import { ICON_KEYS, iconSVG, svgURL, wordmarkSVG } from './vector-icons.js?v=3.10.0';
+import { GLYPHS, FALLBACK } from './pixel-style.js?v=3.11.0';
+import { STROKES, DOTS } from './vector-style.js?v=3.11.0';
+import { POWERS, UPGRADES } from './content.js?v=3.11.0';
+import { WEAPONS } from './weapons.js?v=3.11.0';
+import { CURSE_ICON } from './workshop.js?v=3.11.0';
+import { SERVICES, EMPTY_ICON } from './workbench-ui.js?v=3.11.0';
+import { ICON_KEYS, iconSVG, svgURL, wordmarkSVG } from './vector-icons.js?v=3.11.0';
 
 // In the pixel and vector styles, ASCII art in the interface (the wordmark, the
 // workshop icons and the relic and blueprint sigils) is redrawn inside the same
