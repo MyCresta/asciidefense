@@ -51,7 +51,7 @@ export const UPGRADES = {
   },
   rate: {
     name: 'Fire rate', label: 'Fire rate', group: 'arsenal',
-    description: '+0.13 shots per second per level.',
+    description: '+0.15 shots per second per level.',
     icon: '  // //\n // // \n// //  ',
     maxLevel: 16, soft: 10, baseCost: 14, growth: 1.48
   },
