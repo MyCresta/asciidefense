@@ -507,6 +507,7 @@ div.hardpoint-row .cost { color:var(--ink); }
   --tier-3: color-mix(in oklab, #5aa9ff 68%, var(--ink));
   --tier-4: color-mix(in oklab, #c27dff 68%, var(--ink));
   --tier-5: color-mix(in oklab, #ffb238 72%, var(--ink));
+  --bad: color-mix(in oklab, #ff5d5d 74%, var(--ink));
 }
 [data-tier="2"] { --tier: var(--tier-2); } [data-tier="3"] { --tier: var(--tier-3); }
 [data-tier="4"] { --tier: var(--tier-4); } [data-tier="5"] { --tier: var(--tier-5); }
@@ -519,3 +520,7 @@ div.hardpoint-row .cost { color:var(--ink); }
 .weapon-rolls { color: var(--muted); font-size: .62rem; letter-spacing: .03em; line-height: 1.45; margin: 0 0 12px; white-space: pre-line; }
 @media (max-width:700px) { .weapon-rolls { grid-column: 2; margin: 0 0 4px; } }
 .build-weapons + .dossier-list .weapon-rolls, .dossier-list .weapon-rolls { display: block; margin: -2px 0 6px; }
+
+/* Downsides read in a warning red on every card, roll line and build entry. */
+.power-downside { display: block; margin-top: 4px; color: var(--bad); }
+.downside { color: var(--bad); }

@@ -18,12 +18,12 @@ export const WEAPONS = {
   coil: {
     name: 'Arc coil', role: 'CHAIN FIRE', scale: .75, cadence: .96, reach: .95,
     icon: '  ~\\   \n--((o))\n    /~ ',
-    description: 'Jumps to two extra enemies. Arc upgrades count double. No blast.'
+    description: 'Jumps to two extra enemies. Arc upgrades count double.', downside: 'No blast.'
   },
   mortar: {
     name: 'Flak mortar', role: 'AREA DENIAL', scale: 1.25, cadence: .62, reach: 1.1, unlock: 120,
     icon: '   _   \n  (_)  \n==/ \\==',
-    description: 'Shells burst on impact. Blast upgrades count double. No arcs.'
+    description: 'Shells burst on impact. Blast upgrades count double.', downside: 'No arcs.'
   },
   cryo: {
     name: 'Cryo projector', role: 'CONTROL', scale: .7, cadence: 1.05, reach: .9, unlock: 450,
@@ -33,12 +33,12 @@ export const WEAPONS = {
   beam: {
     name: 'Ion beam', role: 'FOCUS', scale: .3, cadence: 3.2, reach: .92, unlock: 250,
     icon: ' .-.   \n(( ))==\n \'-\'   ',
-    description: 'A steady beam that grows stronger the longer it holds one target, up to +120%. No arcs.'
+    description: 'A steady beam that grows stronger the longer it holds one target, up to +120%.', downside: 'No arcs. Half blast. Starts over on a new target.'
   },
   pulse: {
     name: 'Pulse ring', role: 'SHOCKWAVE', scale: 1, cadence: .55, reach: .62, unlock: 600,
     icon: ' ( . ) \n( (o) )\n ( . ) ',
-    description: 'Hits every hostile close to the Spire at once. Every 3 seconds it also knocks them back. No arcs or blast.'
+    description: 'Hits every hostile close to the Spire at once. Every 3 seconds it also knocks them back.', downside: 'Short reach. No arcs or blast.'
   }
 };
 
@@ -91,7 +91,7 @@ export function forgePrice(mount) {
 export const TRAITS = {
   rapid: { name: 'Rapid', description: '+20% fire rate.', cadence: 1.2 },
   long: { name: 'Long', description: '+15% reach.', reach: 1.15 },
-  heavy: { name: 'Heavy', description: '+35% damage, -15% fire rate.', scale: 1.35, cadence: .85 },
+  heavy: { name: 'Heavy', description: '+35% damage.', downside: '-15% fire rate.', scale: 1.35, cadence: .85 },
   searing: { name: 'Searing', description: 'Hits set the target burning.', burn: .5 },
   forked: { name: 'Forked', description: 'Each hit chains to one more enemy.', chains: 1 },
   keen: { name: 'Keen', description: '+10% critical chance.', crit: .1 },
@@ -124,10 +124,10 @@ export const WEAPON_COMBOS = {
   stormcell: { name: 'Storm cell', trait: 'forked', power: 'tesla', description: 'Forked weapons chain twice more.' },
   hairtrigger: { name: 'Hair trigger', trait: 'rapid', power: 'overclock', description: 'Rapid weapons fire 15% faster again.' },
   glacier: { name: 'Glacier', trait: 'chilling', power: 'frost', description: 'Chilling weapons freeze targets for 1 second.' },
-  manhunt: { name: 'Manhunt', trait: 'hunting', power: 'headhunter', description: 'Hunting weapons deal +30% more to elites and sovereigns.' },
+  manhunt: { name: 'Manhunt', trait: 'hunting', power: 'headhunter', description: 'Hunting weapons deal another +30% to elites and sovereigns.' },
   chainfire: { name: 'Chain fire', trait: 'volatile', power: 'bloom', description: 'Volatile bursts are twice as wide.' },
   overload: { name: 'Overload', trait: 'capacitor', power: 'overclock', description: 'Capacitor weapons charge every 3rd shot.' },
-  assassin: { name: 'Assassin', trait: 'keen', power: 'precision', description: 'Keen weapons gain 10% more critical chance.' }
+  assassin: { name: 'Assassin', trait: 'keen', power: 'precision', description: 'Keen weapons get another +10% critical chance.' }
 };
 
 export function weaponComboActive(game, key) {

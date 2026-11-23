@@ -231,7 +231,7 @@ export function describeBlueprint(game, item) {
   const rarity = GRADES[grade - 1];
   if (isCurse(item)) {
     const curse = CURSES[item.curse];
-    return { name: curse.name, grade: 3, rarity: 'Cursed', description: curse.upside + '. ' + curse.downside + '.', effect: 'Lasts all run', curse: true, icon: '  .-.  \n (x x) \n  |=|  ' };
+    return { name: curse.name, grade: 3, rarity: 'Cursed', description: curse.upside + '.', downside: curse.downside + '.', effect: 'Lasts all run', curse: true, icon: '  .-.  \n (x x) \n  |=|  ' };
   }
   if (isWeapon(item)) {
     const gun = WEAPONS[item.weapon], trait = TRAITS[item.trait];
@@ -245,7 +245,8 @@ export function describeBlueprint(game, item) {
         : 'Reinforce yours to G' + Math.min(MAX_GRADE, Math.max(held.grade + 1, grade)) + ', keeping the best rolls')
       : mounts.length < game.armory.slots ? 'Fits empty hardpoint ' + (mounts.length + 1) : 'Replace a fitted weapon';
     const mods = (item.mods || []).map(key => MODS[key].name).join(', ');
-    return { name, grade, rarity: GRADE_NAMES[grade - 1], description: trait ? trait.description : gun.description,
+    const downside = [trait?.downside, gun.downside].filter(Boolean).join(' ');
+    return { name, grade, rarity: GRADE_NAMES[grade - 1], description: trait ? trait.description : gun.description, downside,
       effect, rolls: rollText(item.rolls) + (mods ? '\nMods: ' + mods : ''), weapon: true, icon: gun.icon, role: gun.role };
   }
   if (key === 'prospect') {
@@ -260,7 +261,9 @@ export function describeBlueprint(game, item) {
   }
   const from = game.levels[key];
   const gain = Math.min(item.levels, upgrade.maxLevel - from);
-  return { name: upgrade.label, grade, rarity, description: upgrade.description, effect: 'Lv.' + from + ' -> ' + (from + gain) + '  /  +' + gain };
+  // Levels past the original cap count for half; say so on the card.
+  const half = upgrade.soft !== undefined && from + gain > upgrade.soft ? '  (half value past Lv.' + upgrade.soft + ')' : '';
+  return { name: upgrade.label, grade, rarity, description: upgrade.description, effect: 'Lv.' + from + ' -> ' + (from + gain) + '  /  +' + gain + half };
 }
 
 export function openCache(game) {

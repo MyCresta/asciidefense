@@ -13,7 +13,7 @@ import { paintPortrait } from './pixel-art.js?v=3.10.0';
 import { fillVectorElement } from './vector-art.js?v=3.10.0';
 import { saveCheckpoint } from './checkpoint.js?v=3.10.0';
 import { runPanels } from './run-panels.js?v=3.10.0';
-import { $, pad, decorateFrame, drawStats, element, setText, tierName, setTier } from './ui.js?v=3.10.0';
+import { $, pad, decorateFrame, drawStats, element, setText, tierName, setTier, withDownside } from './ui.js?v=3.10.0';
 
 const root = document.documentElement;
 function preference(key, fallback) {
@@ -237,7 +237,7 @@ function renderBuild() {
   const items = relics.map(key => {
     const relic = POWERS[key], ranked = game.powers[key] > 1 && relic.next;
     const item = element('li', '', relic.name + (ranked ? ' II' : game.powers[key] > 1 ? ' x' + game.powers[key] : ''));
-    item.title = relic.description + (ranked ? ' ' + relic.next : '');
+    item.title = withDownside(relic.description + (ranked ? ' ' + relic.next : ''), relic.downside);
     setTier(item, ranked ? 'rare' : relic.rarity);
     return item;
   });

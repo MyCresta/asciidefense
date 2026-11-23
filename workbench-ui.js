@@ -1,6 +1,6 @@
 import { $, element, pad, setText, setTier } from './ui.js?v=3.10.0';
 import { forgeWeapon, foundry, openCache, workshopCosts } from './workshop.js?v=3.10.0';
-import { WEAPONS, MOUNT_OUTPUT, HARDPOINT_BOSSES, GRADE_NAMES, MAX_GRADE, MOD_GRADES, mountStats, mountTitle, describeMount } from './weapons.js?v=3.10.0';
+import { WEAPONS, TRAITS, MOUNT_OUTPUT, HARDPOINT_BOSSES, GRADE_NAMES, MAX_GRADE, MOD_GRADES, mountStats, mountTitle, describeMount } from './weapons.js?v=3.10.0';
 
 const SERVICES = {
   caches: { name: 'Big cache', icon: '  ____ \n /___/|\n |___|/' },
@@ -81,7 +81,8 @@ export function workbench(game, {changed}) {
         const nextMod = MOD_GRADES.find(at => at > mount.grade);
         const forgeHelp = Number.isFinite(cost) ? ' Forge to G' + (mount.grade + 1) + (nextMod === mount.grade + 1 ? ', which rolls a new mod' : '') + '.' : '';
         const rolls = describeMount(mount);
-        fitted.button.title = WEAPONS[mount.key].description + (rolls ? ' ' + rolls + '.' : '') + forgeHelp;
+        const downside = [TRAITS[mount.trait]?.downside, WEAPONS[mount.key].downside].filter(Boolean).join(' ');
+        fitted.button.title = WEAPONS[mount.key].description + (downside ? ' Downside: ' + downside : '') + (rolls ? ' ' + rolls + '.' : '') + forgeHelp;
         fitted.button.classList.remove('vacant');
       } else {
         setText(fitted.icon, EMPTY_ICON);
