@@ -156,6 +156,25 @@ export const MOTIFS = {
   tune: [S(GEAR(4.4)), F(c(12, 12, 2))],
   mystery: [S(rect(7, 5, 10, 14, 1.8)), S('M10.2 10a1.9 1.9 0 1 1 2.6 1.8c-.6.3-.8.7-.8 1.4', 1.5), F(c(12, 15.6, .9))],
   socket: [S(c(12, 12, 6.5), 1.3, .6), S('M12 9v6M9 12h6', 1.6)],
+  // ---- relics with mechanics of their own
+  drone: [S(c(12, 12, 6.5), 1, .45), F(c(18.5, 12, 2)), F(c(12, 12, 1.6))],
+  well: [S('M12 5.5a6.5 6.5 0 1 1-6.5 6.5', 1.6), S('M12 8.5a3.5 3.5 0 1 1-3.5 3.5', 1.4, .7), F(c(12, 12, 1.2))],
+  mark: [S(c(12, 12, 5.5), 1.4), S('M9 9l6 6M15 9l-6 6', 1.8)],
+  knock: [F(c(15, 12, 2.6)), S('M5 9.5l3 2.5-3 2.5M8.5 9.5l3 2.5-3 2.5', 1.5)],
+  furnace: [S(rect(6.5, 9, 11, 10, 1.5)), S('M9 9V6.5M12 9V5.5M15 9V6.5', 1.4, .7), F(FLAME, .25)],
+  trophy: [S('M8 6h8v3a4 4 0 0 1-8 0Z'), S('M12 13v3.5M9 18.5h6', 1.6), S('M8 7.5H6.2a2 2 0 0 0 2 3M16 7.5h1.8a2 2 0 0 1-2 3', 1.2)],
+  wind: [S('M5 9h9a2.5 2.5 0 1 0-2.5-2.5', 1.6), S('M5 13h12a2.5 2.5 0 1 1-2.5 2.5', 1.6), S('M5 17h5', 1.4, .6)],
+  mimic: [S(rect(6, 7, 12, 11, 2)), F(c(9.8, 11, 1.1)), F(c(14.2, 11, 1.1)), S('M8.5 15l1.2-1 1.2 1 1.1-1 1.1 1 1.2-1 1.2 1', 1.2)],
+  vane: [S('M12 5v14M5 12h14', 1.2, .6), S('M7 7l10 10', 1.8), F('M17 17l-3.6-.6 3-3Z')],
+  sapper: [S(c(12, 12, 5.5), 1.5), S('M8 16L16 8', 1.6), S('M12 4.5v2.5M12 17v2.5', 1.3, .6)],
+  mine: [F(c(12, 12, 3.4)), S(rays(12, 12, 4.4, 6.8, 8), 1.5)],
+  sunlance: [F(c(7.5, 12, 2.6)), S('M10.5 12H20', 2.2), S(rays(7.5, 12, 3.8, 5.6, 6, 30), 1.2, .7)],
+  field: [S(c(12, 12, 7), 1.1, .45), S(c(12, 12, 4.2), 1.3, .7), F(c(12, 12, 1.8))],
+  overcharge: [S(rect(5, 7.5, 12, 9, 1.5)), S('M17 10.5h2v3h-2', 1.3), F(BOLT, .9)],
+  scrapPlate: [S(SHIELD), S('M12 8.5v7M13.7 9.8c-.5-.5-1-.7-1.7-.7-1 0-1.7.5-1.7 1.3 0 1.8 3.4 1 3.4 2.8 0 .8-.7 1.3-1.7 1.3-.8 0-1.4-.3-1.9-.8', 1.2)],
+  steady: [S(c(12, 12, 6.2), 1.4), S('M12 4v4M12 16v4M4 12h4M16 12h4', 1.4), F(c(12, 12, 1.2))],
+  shatterIce: [S(SNOW, 1.2, .55), S('M7 7l4 4M17 7l-4 4M7 17l4-4M17 17l-4-4', 1.7)],
+  link: [S(rect(4.5, 9.5, 8, 5, 2.5), 1.6), S(rect(11.5, 9.5, 8, 5, 2.5), 1.6)],
 };
 
 // Badges behind relics, by family, plus a soft plate for workshop upgrades.
@@ -186,6 +205,9 @@ const RELIC_MOTIFS = {
   ward: 'ward', repair: 'siphon', reservoir: 'battery', bulwark: 'rivets', triage: 'cross', ballast: 'stoneHeart',
   returnfire: 'spite', fuse: 'phoenix', galvanic: 'heartSpark', plating: 'reactive', overshield: 'overshield',
   lifeline: 'lifeline', bulkhead: 'bulkhead',
+  drone: 'drone', gravity: 'well', marked: 'mark', concuss: 'knock', furnace: 'furnace', trophy: 'trophy',
+  secondwind: 'wind', mimic: 'mimic', vane: 'vane', sapper: 'sapper', mines: 'mine', sunlance: 'sunlance',
+  aura: 'field', overcharge: 'overcharge', scrapshield: 'scrapPlate', kinetic: 'steady', shatter: 'shatterIce', linked: 'link',
 };
 
 const UPGRADE_MOTIFS = {

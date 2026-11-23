@@ -28,18 +28,18 @@ test('all five playback rates produce identical combat for the same seed, loadou
 test('a large accelerated frame stops exactly on the draft and discards leftover simulation time', () => {
   const game = start(149);
   const clock = new SimulationClock();
-  play(game, precision, 119.75);
+  play(game, precision, 179.75);
   clock.advance(game, 0.8, 10);
   assert.equal(game.status, 'draft');
-  assert.equal(game.time, 120);
+  assert.equal(game.time, 180);
   const frozen = snapshotCombat(game);
   clock.advance(game, 1, 10);
   assert.deepEqual(snapshotCombat(game), frozen);
   takeRelic(game, precision.relics);
   clock.advance(game, 0.001, 10);
-  assert.equal(game.time, 120);
+  assert.equal(game.time, 180);
   clock.advance(game, 0.001, 10);
-  assert.ok(Math.abs(game.time - (120 + 1 / 60)) < 1e-8);
+  assert.ok(Math.abs(game.time - (180 + 1 / 60)) < 1e-8);
   game.togglePause();
   clock.advance(game, 5, 10);
   game.togglePause();

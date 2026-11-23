@@ -1,7 +1,7 @@
-import { UPGRADES } from './content.js?v=3.11.0';
-import { cost as relicCost } from './relic-effects.js?v=3.11.0';
-import { CURSES, applyCurse, cursed } from './hazards.js?v=3.11.0';
-import { WEAPONS, MAX_GRADE, GRADE_NAMES, TRAITS, MODS, ROLL_STATS, ROLL_MIN, TEMPER_MAX, availableWeapons, rollWeapon, receiveWeapon, replaceWeapon, forgePrice, mountTitle, setGrade, rollText } from './weapons.js?v=3.11.0';
+import { UPGRADES } from './content.js?v=3.12.0';
+import { cost as relicCost } from './relic-effects.js?v=3.12.0';
+import { CURSES, applyCurse, cursed } from './hazards.js?v=3.12.0';
+import { WEAPONS, MAX_GRADE, GRADE_NAMES, TRAITS, MODS, ROLL_STATS, ROLL_MIN, TEMPER_MAX, availableWeapons, rollWeapon, receiveWeapon, replaceWeapon, forgePrice, mountTitle, setGrade, rollText } from './weapons.js?v=3.12.0';
 
 export const CURSE_ICON = '  .-.  \n (x x) \n  |=|  ';
 
@@ -121,13 +121,14 @@ export function awardSalvage(game, enemy) {
     if (w.found === 0 && !magpie) {
       if (w.dryKills < 5) return false;
     } else {
-      const lateDelay = Math.min(65, Math.max(0, game.time - 240) / 8);
+      // Drops are spaced at least 20 seconds apart early on, and further apart as the run goes.
+      const lateDelay = Math.min(75, Math.max(0, game.time - 240) / 7);
       const sooner = 1 - .06 * (game.levels.salvage || 0) - (game.powers?.scavenger ? .15 : 0);
-      const delay = (Math.min(26, 12 + game.time / 22) + lateDelay) * sooner;
-      const minimum = magpie ? Math.min(20, delay * .4) : enemy.elite ? Math.max(12, delay * .72) : delay;
+      const delay = (Math.min(32, 15 + game.time / 18) + lateDelay) * sooner;
+      const minimum = magpie ? Math.min(25, delay * .5) : enemy.elite ? Math.max(18, delay * .8) : delay;
       if (w.lastDrop >= 0 && game.time - w.lastDrop < minimum) return false;
-      const chance = magpie ? 1 : enemy.elite ? .48 : .065 + Math.max(0, w.dryKills - 12) * .008;
-      if (w.dryKills < 26 && chance < 1 && game.random() >= chance) return false;
+      const chance = magpie ? 1 : enemy.elite ? .42 : .058 + Math.max(0, w.dryKills - 14) * .007;
+      if (w.dryKills < 32 && chance < 1 && game.random() >= chance) return false;
     }
   }
   w.found++;
@@ -163,7 +164,7 @@ export function smallCache(game) {
   }
   const key = keys[Math.min(keys.length - 1, Math.floor(game.random() * keys.length))];
   const from = game.levels[key];
-  const gain = Math.min(game.random() < .2 ? 2 : 1, UPGRADES[key].maxLevel - from);
+  const gain = Math.min(game.random() < .1 ? 2 : 1, UPGRADES[key].maxLevel - from);
   game.levels[key] = from + gain;
   game.note(`Small cache: ${UPGRADES[key].label} Lv.${from + gain}.`, 'upgrade');
   const stacked = game.effects.filter(effect => effect.type === 'gain').length;

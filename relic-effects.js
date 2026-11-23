@@ -4,7 +4,7 @@ export function stat(game, key, base) {
   const p = game.powers;
   switch (key) {
     case 'range':
-      return Math.max(8, base * (p.rail ? 1.30 : 1) - (p.ballast ? 7 : 0));
+      return Math.max(8, base * (1 + (p.rail ? .3 : 0) + (vanePhase(game) === 2 ? .3 : 0)) - (p.ballast ? 7 : 0));
     case 'rate': {
       let bonus = .15 * (p.overclock || 0);
       if (p.clockwork && game.time % 12 < 3) bonus += .45;
@@ -14,6 +14,8 @@ export function stat(game, key, base) {
       if (p.warcry && game.enemies.some(enemy => enemy.boss)) bonus += .3;
       if (p.overdrive && game.time % 45 < 6) bonus += 1;
       if (p.momentum) bonus += momentum(game);
+      if (p.overcharge) bonus += .45;
+      if (vanePhase(game) === 1) bonus += .3;
       return base * (1 + bonus) * (p.rail ? .88 : 1);
     }
     case 'damage': {
@@ -22,15 +24,35 @@ export function stat(game, key, base) {
       if (p.regicide) bonus += .15 * Math.min(game.bossKills, 4);
       // Hoard: banked scrap sharpens every shot, so saving up is a real choice.
       if (p.hoard) bonus += Math.min(.3, Math.max(0, game.scrap) / 3333);
+      if (p.furnace) bonus += Math.min(40, game.relicState?.furnace || 0) / 100;
+      if (p.trophy) bonus += .03 * Math.min(15, game.relicState?.trophies || 0);
+      if (p.kinetic) bonus += steady(game);
+      if (vanePhase(game) === 0) bonus += .3;
       return base * (1 + bonus) * (p.repeater ? .8 : 1);
     }
     case 'splash': return p.mesh ? base * .5 : base;
     case 'chain': return base + (p.mesh ? 2 : 0) + Number(game.synergyActive?.('supercell') || false);
-    case 'critChance': return Math.min(1, base + (p.caliper || 0) * .08 + (p.precision ? .18 : 0) + (p.deadeye || 0) * .06);
+    case 'critChance': return Math.min(1, base + (p.caliper || 0) * .05 + (p.precision ? .1 : 0) + (p.deadeye || 0) * .04);
     case 'armor': return base + (p.bulwark || 0) * 2 + (p.plating && game.time < (game.relicState?.plateUntil || 0) ? 6 : 0);
     case 'regen': return base + (game.hp < game.maxHp / 2 ? (p.triage || 0) * .7 : 0);
     default: return base;
   }
+}
+
+// Weather vane: 0 damage, 1 fire rate, 2 range, turning every 20 seconds.
+export function vanePhase(game) {
+  return game.powers?.vane ? Math.floor(game.time / 20) % 3 : -1;
+}
+
+// Steady hands: +5% damage per 4 quiet seconds since the last core impact, up to +40%.
+function steady(game) {
+  const quiet = game.time - (game.relicState?.hitAt ?? -1000);
+  return Math.min(.4, .05 * Math.floor(Math.max(0, quiet) / 4));
+}
+
+// Overcharger: every 10 seconds, the weapons stall for the last 1.5 seconds.
+export function stalled(game) {
+  return Boolean(game.powers?.overcharge) && game.time % 10 >= 8.5;
 }
 
 // Momentum: stacks from recent kills, each lasting four seconds.
@@ -60,6 +82,7 @@ export function hitFactor(game, target, direct) {
   if (p.slug && (target.shield > 0 || target.trait === 'plated' || target.type === 'brute')) bonus += .3;
   if (p.tracker && (FAST.has(target.type) || target.trait === 'swift')) bonus += .25;
   if (p.tarpit && inRadius(target, CORE, tarRadius(game))) bonus += .1;
+  if (p.marked && target.markUntil > game.time) bonus += .6;
   if (target.elite || target.boss) bonus += .08 * (game.levels?.hunter || 0);
   if (p.packhunter) {
     let neighbors = 0;
@@ -77,7 +100,7 @@ const tarRadius = game => game.synergyActive?.('killzone') ? 34 : 24;
 
 // Extra critical chance against this particular target.
 export function critBonus(game, target) {
-  return game.powers.brittle && target.slowUntil > game.time ? .15 : 0;
+  return game.powers.brittle && target.slowUntil > game.time ? .1 : 0;
 }
 
 export function speed(game, target, base) {
@@ -125,8 +148,8 @@ export function midas(game, previous, kills) {
 }
 
 export function criticalMultiplier(game) {
-  return (game.powers.precision ? 1.6 : 2) + .1 * (game.levels?.lethality || 0)
-    + .15 * (game.powers.deadeye || 0) + (game.synergyActive?.('executioner') ? .25 : 0);
+  return 2 - (game.powers.precision ? .25 : 0) + .1 * (game.levels?.lethality || 0)
+    + .1 * (game.powers.deadeye || 0) + (game.synergyActive?.('executioner') ? .2 : 0);
 }
 
 export function cost(game, price) {
@@ -177,10 +200,41 @@ export function onDeath(game, enemy) {
     state.streakUntil = game.time + 4;
   }
   if (p.lifeline && enemy.boss) game.hp = Math.min(game.maxHp, game.hp + game.maxHp * .3);
+  if (p.marked && enemy.markUntil > game.time) game.scrap += 8;
+  if (p.trophy && (enemy.elite || enemy.boss) && game.relicState) game.relicState.trophies = Math.min(15, (game.relicState.trophies || 0) + 1);
+  if (p.shatter && (enemy.slowUntil > game.time || enemy.frozenUntil > game.time)) {
+    game.effect(enemy.x, enemy.y, 'chill', 10, .5);
+    for (const other of game.enemies) {
+      if (other !== enemy && other.hp > 0 && inRadius(other, enemy, 10)) other.frozenUntil = Math.max(other.frozenUntil || 0, game.time + 1);
+    }
+  }
+}
+
+// Every hit that lands, direct or not.
+export function onStrike(game, enemy, direct) {
+  const p = game.powers;
+  if (p.sapper) enemy.sapUntil = game.time + 4;
+  if (p.concuss && direct && !(enemy.knockAt > game.time)) {
+    enemy.knockAt = game.time + 1;
+    const gap = Math.hypot(enemy.x, enemy.y), push = enemy.boss ? 1 : 3;
+    if (gap > 0) {
+      const factor = (gap + push) / gap;
+      enemy.x = Math.max(-139, Math.min(139, enemy.x * factor));
+      enemy.y = Math.max(-83, Math.min(83, enemy.y * factor));
+    }
+  }
 }
 
 export function impact(game, enemy, base) {
   let damage = game.powers.glass ? Math.ceil(base * 1.25) : base;
+  if (game.powers.sapper && enemy?.sapUntil > game.time) damage = Math.ceil(damage * .7);
+  if (game.powers.scrapshield && damage > 1) {
+    const share = Math.floor(damage / 2), price = share * 3;
+    if (share > 0 && game.scrap >= price) {
+      game.scrap -= price;
+      damage -= share;
+    }
+  }
   if (game.powers.bulkhead) damage = Math.min(damage, Math.ceil(game.maxHp * .12));
   if (game.powers.plating && game.relicState) game.relicState.plateUntil = game.time + 3;
   if (game.powers.returnfire) burst(game, CORE, 22, damage * 2);
@@ -269,4 +323,146 @@ export function onTick(game, dt) {
       game.hurt(enemy, 2 * game.damage);
     }
   }
+  if (p.drone && crossedPeriod(game.time, dt, .25)) droneTick(game, crossedPeriod(game.time, dt, 1));
+  if (p.gravity && crossedPeriod(game.time, dt, 9)) gravityWell(game);
+  if (p.marked && crossedPeriod(game.time, dt, 6)) {
+    const [target] = strongest(game, 1);
+    if (target) {
+      target.markUntil = game.time + 6;
+      game.effect(target.x, target.y, 'crit', 6, .6);
+    }
+  }
+  if (p.furnace && crossedPeriod(game.time, dt, 20) && game.scrap >= 20 && (game.relicState.furnace || 0) < 40) {
+    game.scrap -= Math.floor(game.scrap * .1);
+    game.relicState.furnace = (game.relicState.furnace || 0) + 1;
+    game.effect(0, 0, 'burn', 6, .6);
+  }
+  if (p.secondwind && game.hp < game.maxHp * .3 && game.hp > 0 && game.time >= (game.relicState.windAt || 0)) {
+    game.relicState.windAt = game.time + 60;
+    for (const enemy of game.enemies) enemy.frozenUntil = Math.max(enemy.frozenUntil || 0, game.time + 4);
+    game.effect(0, 0, 'chill', game.range, 1);
+    game.note('Second wind: hostiles frozen.', 'system');
+  }
+  if (p.mines) mineTick(game, dt);
+  if (p.sunlance && crossedPeriod(game.time, dt, 12)) sunLance(game);
+  if (p.aura && crossedPeriod(game.time, dt, 1)) {
+    let hit = false;
+    for (const enemy of game.enemies) {
+      if (enemy.hp > 0 && inRadius(enemy, CORE, 15)) { game.strike(enemy, game.damage * .5); hit = true; }
+    }
+    if (hit) game.effect(0, 0, 'pulse', 15, .35);
+  }
+}
+
+// Sentry drones orbit the Spire, a quarter turn every 2 seconds.
+export function dronePositions(game) {
+  const count = Math.min(2, game.powers?.drone || 0);
+  return Array.from({ length: count }, (_, i) => {
+    const angle = game.time * .8 + i * Math.PI;
+    return { x: Math.cos(angle) * 24, y: Math.sin(angle) * 24 };
+  });
+}
+
+function droneTick(game, fire) {
+  for (const drone of dronePositions(game)) {
+    game.effect(drone.x, drone.y, 'ward', 1.4, .3);
+    if (!fire) continue;
+    const target = game.nearest(drone, 18);
+    if (!target) continue;
+    game.beam(target, 'twin', drone);
+    game.strike(target, game.damage * .6);
+  }
+}
+
+// Gravity well: the hostile with the most neighbours becomes the centre of a tight knot.
+function gravityWell(game) {
+  const near = game.enemies.filter(enemy => enemy.hp > 0 && inRadius(enemy, CORE, game.range));
+  let center = null, best = 0;
+  for (const enemy of near) {
+    const count = near.filter(other => other !== enemy && inRadius(other, enemy, 16)).length;
+    if (count > best) { best = count; center = enemy; }
+  }
+  if (!center) return;
+  game.effect(center.x, center.y, 'pulse', 20, .6);
+  for (const enemy of game.enemies) {
+    if (enemy === center || enemy.hp <= 0 || !inRadius(enemy, center, 20)) continue;
+    enemy.x += (center.x - enemy.x) * .6;
+    enemy.y += (center.y - enemy.y) * .6;
+  }
+}
+
+// Minefield: a mine every 5 seconds, up to 4. Saved mines are checked before use.
+function mineTick(game, dt) {
+  const state = game.relicState;
+  const mines = Array.isArray(state.mines) ? state.mines.filter(m => Number.isFinite(m?.x) && Number.isFinite(m?.y)).slice(0, 4) : [];
+  if (crossedPeriod(game.time, dt, 5) && mines.length < 4) {
+    const angle = game.random() * Math.PI * 2, reach = (.35 + .55 * game.random()) * Math.min(game.range, 60);
+    mines.push({ x: Math.cos(angle) * reach, y: Math.sin(angle) * reach });
+  }
+  const show = crossedPeriod(game.time, dt, .5);
+  state.mines = mines.filter(mine => {
+    const trigger = game.enemies.find(enemy => enemy.hp > 0 && inRadius(enemy, mine, 3));
+    if (!trigger) {
+      if (show) game.effect(mine.x, mine.y, 'ward', 1.2, .55);
+      return true;
+    }
+    game.effect(mine.x, mine.y, 'splash', 9, .5);
+    for (const enemy of game.enemies) if (enemy.hp > 0 && inRadius(enemy, mine, 9)) game.strike(enemy, game.damage * 3);
+    return false;
+  });
+}
+
+// Sun lance: aim from the Spire through whichever hostile lines up the most others behind it.
+function sunLance(game) {
+  const near = game.enemies.filter(enemy => enemy.hp > 0 && inRadius(enemy, CORE, game.range));
+  const along = (aim, enemy) => {
+    const length = Math.hypot(aim.x, aim.y) || 1;
+    const dx = aim.x / length, dy = aim.y / length;
+    const ahead = enemy.x * dx + enemy.y * dy;
+    return ahead > 0 && Math.abs(enemy.x * dy - enemy.y * dx) <= 4;
+  };
+  let aim = null, best = 0;
+  for (const enemy of near) {
+    const count = near.filter(other => along(enemy, other)).length;
+    if (count > best) { best = count; aim = enemy; }
+  }
+  if (!aim) return;
+  const length = Math.hypot(aim.x, aim.y) || 1;
+  game.beam({ x: aim.x / length * game.range, y: aim.y / length * game.range }, 'lance');
+  for (const enemy of near) {
+    if (!along(aim, enemy)) continue;
+    game.effect(enemy.x, enemy.y, 'crit', 4);
+    game.strike(enemy, game.damage * 3);
+  }
+}
+
+// Timed relic and weapon effects for the cooldown strip: seconds left, and whether it is active now.
+export function cooldowns(game) {
+  const p = game.powers, t = game.time, list = [];
+  const every = (label, period, active = 0) => {
+    const phase = t % period;
+    list.push(phase < active ? { label, left: active - phase, active: true } : { label, left: period - phase, active: false });
+  };
+  for (const mount of game.armory?.mounts || []) {
+    if (mount.key === 'pulse') list.push({ label: 'Push', left: Math.max(0, (mount.pushAt || 0) - t), active: false });
+  }
+  if (p.repulse) list.push({ label: 'Repulse', left: Math.max(0, game.pulseAt - t), active: false });
+  if (p.ward) list.push({ label: 'Ward', left: Math.max(0, game.wardAt - t), active: false });
+  if (p.secondwind) list.push({ label: '2nd wind', left: Math.max(0, (game.relicState?.windAt || 0) - t), active: false });
+  if (p.fuse) list.push({ label: 'Fuse', left: 0, active: false, spent: game.fuseUsed });
+  if (p.clockwork) every('Flywheel', 12, 3);
+  if (p.stasis) every('Stasis', 12, 2);
+  if (p.overdrive) every('Overdrive', 45, 6);
+  if (p.overcharge) list.push(stalled(game) ? { label: 'Stall', left: 10 - t % 10, active: true } : { label: 'Stall', left: 8.5 - t % 10, active: false });
+  if (p.vane) list.push({ label: ['Vane dmg', 'Vane rate', 'Vane range'][vanePhase(game)], left: 20 - t % 20, active: true });
+  if (p.static) every('Static', 8);
+  if (p.mortar) every('Mortar', 16);
+  if (p.nova) every('Nova', 15);
+  if (p.starfall) every('Starfall', 20);
+  if (p.horizon) every('Bell', p.horizon > 1 ? 20 : 30);
+  if (p.gravity) every('Gravity', 9);
+  if (p.marked) every('Mark', 6);
+  if (p.sunlance) every('Lance', 12);
+  if (p.mines) every('Mine', 5);
+  return list;
 }

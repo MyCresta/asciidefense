@@ -104,17 +104,7 @@ h2 { font-size:.86rem; font-weight:700; letter-spacing:.095em; text-transform:up
 .entity-stats dt { color:var(--muted); }
 .leader { min-width:0; flex:1; overflow:hidden; height:1em; color:var(--faint); white-space:nowrap; letter-spacing:1px; }
 .entity-stats dd { font-weight:500; }
-.build-list { margin:-8px 18px 12px; padding-top:8px; border-top:1px dashed var(--faint); min-height:0; flex:0 1 auto; max-height:38%; overflow:auto; display:flex; flex-direction:column; gap:7px; scrollbar-width:thin; }
-.build-list[hidden] { display:none; }
-.build-levels { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:3px 10px; font-size:.7rem; }
-.build-chip { display:flex; justify-content:space-between; gap:4px; color:var(--muted); white-space:nowrap; overflow:hidden; transition:color .4s; }
-.build-chip b { color:var(--ink); font-weight:600; }
-.build-chip.fresh, .build-chip.fresh b { color:var(--accent); animation:build-flash .6s steps(2) 3; }
 @keyframes build-flash { 50% { opacity:.35; } }
-.build-relics { list-style:none; margin:0; padding:0; display:flex; flex-wrap:wrap; gap:3px 12px; font-size:.7rem; color:var(--ink); }
-.build-relics li::before { content:'* '; color:var(--accent); }
-.build-relics li.cursed { color:var(--muted); }
-.build-relics li.cursed::before { content:'x '; color:inherit; }
 .balance { font-size:.84rem; color:var(--accent); }
 .upgrade-list { flex:1; min-height:0; margin:0 16px 9px; display:flex; flex-direction:column; }
 .upgrade-row { position:relative; flex:1; min-height:0; width:100%; display:flex; align-items:center; gap:clamp(6px,.8vw,14px); text-align:left; }
@@ -345,7 +335,6 @@ dialog::backdrop { background:#000c; }
   .inspector .section-head h2 { display:none; }
   #inspect-action { position:absolute; right:12px; bottom:8px; padding:3px; }
   .side.show-inspector .entity-stats { margin-bottom:19px; }
-  .build-list { display:none; }
   .upgrade-copy { min-width:0; }
   #draft-dialog { padding:18px; max-height:94dvh; }
   .draft-grid { grid-template-columns:1fr; gap:5px; }
@@ -515,7 +504,6 @@ div.hardpoint-row .cost { color:var(--ink); }
 .draft-card[data-tier]:not([data-tier="1"]) .power-family,
 .draft-card[data-tier]:not([data-tier="1"]) .power-name { color: var(--tier); }
 .upgrade-name[data-tier]:not([data-tier="1"]),
-.build-relics li[data-tier]:not([data-tier="1"]),
 .build-weapons li[data-tier]:not([data-tier="1"]) span:first-child { color: var(--tier); }
 .weapon-rolls { color: var(--muted); font-size: .62rem; letter-spacing: .03em; line-height: 1.45; margin: 0 0 12px; white-space: pre-line; }
 @media (max-width:700px) { .weapon-rolls { grid-column: 2; margin: 0 0 4px; } }
@@ -524,3 +512,27 @@ div.hardpoint-row .cost { color:var(--ink); }
 /* Downsides read in a warning red on every card, roll line and build entry. */
 .power-downside { display: block; margin-top: 4px; color: var(--bad); }
 .downside { color: var(--bad); }
+
+/* Inspector: the Spire's main numbers (or a weapon's) in two columns. Changed numbers light up briefly. */
+.entity-stats.wide { grid-template-columns:repeat(2,minmax(0,1fr)); column-gap:16px; }
+.entity-stats>div.fresh dd { color:var(--accent); animation:build-flash .6s steps(2) 3; }
+.weapon-portrait { width:auto; max-width:100%; font-size:clamp(9px,.95vw,15px); line-height:1.15; text-align:center; white-space:pre; }
+.weapon-portrait[hidden] { display:none; }
+.portrait-area.weapon-view > #portrait, .portrait-area.weapon-view > #portrait-pixel, .portrait-area.weapon-view > #portrait-vector { visibility:hidden; }
+.portrait-area.weapon-view > .weapon-portrait { position:absolute; }
+.inspector .scope-action:disabled { color:var(--muted); cursor:default; }
+
+/* Workshop: a weapon you cannot afford to forge still opens its stats. */
+.hardpoint-row.cant-forge .cost { color:var(--muted); }
+.hardpoint-row:not(.cant-forge) .cost:hover { color:var(--ink); text-decoration:underline; }
+
+/* Timed effects: a compact list in the battlefield's top-left corner. */
+.cooldowns { position:absolute; z-index:1; top:8px; left:14px; margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:1px; font-size:.64rem; letter-spacing:.04em; color:var(--muted); pointer-events:none; }
+.cooldowns:empty { display:none; }
+.cooldowns li { display:flex; justify-content:space-between; gap:10px; min-width:9.5em; padding:0 5px; background:var(--surface); }
+.cooldowns b { font-weight:600; color:var(--ink); }
+.cooldowns li.active b, .cooldowns li.ready b { color:var(--accent); }
+.cooldowns li.spent { opacity:.6; }
+@media (max-width:700px) { .cooldowns { top:4px; left:8px; font-size:.55rem; } .cooldowns li { min-width:8em; } }
+.entity-stats.wide>div.span { grid-column:1 / -1; }
+@media (max-width:700px) { .entity-stats.wide { column-gap:8px; } .entity-stats.wide>div { font-size:.58rem; gap:2px; } .weapon-portrait { font-size:7px; } }

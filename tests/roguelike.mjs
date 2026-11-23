@@ -79,16 +79,16 @@ test('opening relic is optional and can be secured only once', () => {
   assert.ok(game.time > time);
 });
 
-test('crossing 02:00 freezes combat, persists the same draft, and pays exactly one choice', () => {
+test('crossing 03:00 freezes combat, persists the same draft, and pays exactly one choice', () => {
   const storage = new MemoryStorage();
   const game = start(587, storage);
-  play(game, precision, 119.75);
+  play(game, precision, 179.75);
   assert.equal(game.status, 'running');
   const run = game.run;
   game.update(5);
   assert.equal(game.status, 'draft');
   assert.equal(game.draftReason, 'time');
-  assert.ok(Math.abs(game.time - 120) < 1e-6, 'Draft opened at ' + game.time);
+  assert.ok(Math.abs(game.time - 180) < 1e-6, 'Draft opened at ' + game.time);
   assert.equal(game.starterReady, false);
   const frozen = snapshotCombat(game);
   game.update(50);
@@ -105,7 +105,7 @@ test('crossing 02:00 freezes combat, persists the same draft, and pays exactly o
   assert.equal(restored.pickPower(chosen), false);
   assert.equal(restored.status, 'running');
   restored.update(1);
-  assert.ok(restored.time > 120 && restored.time < 122);
+  assert.ok(restored.time > 180 && restored.time < 182);
   assert.equal(restored.run, run);
   assert.ok(restored.nextDraft > restored.time);
 });
@@ -204,32 +204,53 @@ test('an unattended run eventually ends; restarting preserves its record and cle
 
 // These small encounters isolate interactions that can occur in a long run but
 // are unreliable to hit by chance, such as killing a boss on the draft tick.
-test('one kill on the draft boundary preserves both distinct rewards across a reload', () => {
+test('a sovereign kill on the draft boundary turns that draft rare and pays one relic across a reload', () => {
   const storage = new MemoryStorage();
   const game = start(109, storage);
-  play(game, precision, 119.99);
+  play(game, precision, 179.99);
+  const relics = Object.values(game.powers).reduce((sum, count) => sum + count, 0);
   const boss = game.spawn('sovereign', 9, 0);
   boss.hp = 1;
   game.armory.mounts[0].cooldown = 0;
   assert.ok(game.focus(boss.id));
   game.update(1);
   assert.equal(game.bossKills, 1);
-  assert.equal(game.draftReason, 'time');
-  takeRelic(game, []);
   assert.equal(game.draftReason, 'boss');
+  assert.equal(game.rareDraft, false);
   assert.equal(saveCheckpoint(game), true);
   const restored = start(5, storage, true);
   assert.deepEqual(restored.choices, game.choices);
-  const second = takeRelic(restored, []);
-  assert.equal(restored.pickPower(second), false);
+  const chosen = takeRelic(restored, []);
+  assert.equal(restored.pickPower(chosen), false);
   assert.equal(restored.status, 'running');
-  assert.equal(restored.time, 120);
+  assert.equal(restored.time, 180);
   assert.equal(restored.bossKills, 1);
-  assert.equal(Object.values(restored.powers).reduce((sum, count) => sum + count, 0), 2);
+  assert.equal(Object.values(restored.powers).reduce((sum, count) => sum + count, 0), relics + 1);
+});
+
+test('a sovereign kill between drafts is remembered across a reload', () => {
+  const storage = new MemoryStorage();
+  const game = start(111, storage);
+  play(game, precision, 30);
+  const boss = game.spawn('sovereign', 9, 0);
+  boss.hp = 1;
+  game.armory.mounts[0].cooldown = 0;
+  assert.ok(game.focus(boss.id));
+  game.update(1);
+  assert.equal(game.bossKills, 1);
+  assert.equal(game.status, 'running');
+  assert.equal(game.rareDraft, true);
+  assert.equal(saveCheckpoint(game), true);
+  const restored = start(5, storage, true);
+  assert.equal(restored.rareDraft, true);
+  restored.nextDraft = restored.time + .01;
+  restored.update(.05);
+  assert.equal(restored.draftReason, 'boss');
 });
 
 test('splitters leave live offspring; shields and healing change the damage needed', () => {
   const game = start(293);
+  game.armory.mounts[0] = { key: 'bolt', grade: 1, trait: null, cooldown: 0 };
   game.enemies = [];
   game.spawnClock = 60;
   const parent = game.spawn('splitter', 20, 0);
@@ -281,6 +302,9 @@ function synergyEncounter(relic, upgrade, hasRelic, level) {
   game.enemies = [];
   // Synergy geometry assumes the single-target bolt caster as the primary.
   game.armory.mounts[0] = { key: 'bolt', grade: 1, trait: null, cooldown: 0 };
+  // No cache drops: a random small cache could otherwise complete the recipe mid-test.
+  game.workshop.found = 1;
+  game.workshop.lastDrop = 0;
   game.levels[upgrade] = level;
   if (hasRelic) game.powers[relic] = 1;
   return game;
@@ -355,9 +379,9 @@ for (const build of [precision, ordnance]) {
           tiers.add(enemy.tier);
         }
         if (game.bossKills > bosses) {
-          assert.equal(game.status, 'draft');
-          assert.equal(game.draftReason, 'boss');
-          assert.ok(game.choices.some(id => POWERS[id].rarity === 'rare'));
+          // A sovereign kill turns the next timed draft into a rare one.
+          assert.ok(game.rareDraft || (game.status === 'draft' && game.draftReason === 'boss'));
+          if (game.status === 'draft') assert.ok(game.choices.some(id => POWERS[id].rarity === 'rare'));
           confirmedBossDrafts.push(game.time);
           bosses = game.bossKills;
         }

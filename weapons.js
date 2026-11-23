@@ -1,9 +1,11 @@
+import { stalled, criticalMultiplier } from './relic-effects.js?v=3.12.0';
+
 // Cadence and reach multiply the tower's fire rate and range for each mount.
 export const WEAPONS = {
   bolt: {
     name: 'Bolt caster', role: 'PRECISION', scale: 1, cadence: 1.18, reach: 1,
     icon: '  |\\   \n==|=>> \n  |/   ',
-    description: 'Fast single bolts with +12% critical chance and harder critical hits.'
+    description: 'Fast single bolts with +8% critical chance and +0.25x critical damage.'
   },
   scatter: {
     name: 'Scattergun', role: 'CLOSE DEFENSE', scale: .78, cadence: 1.12, reach: .83,
@@ -61,7 +63,7 @@ export const ROLL_STATS = { power: 'dmg', cadence: 'rate', reach: 'reach' };
 
 // Each weapon bends the shared upgrades its own way: blasts, arcs or critical hits.
 export const ROLE_RULES = {
-  bolt: { crit: .12, critPower: 1.25 },
+  bolt: { crit: .08, critPower: 1.125 },
   coil: { chain: 2, splash: 0 },
   mortar: { chain: 0, splash: 2 },
   beam: { chain: 0, splash: .35 },
@@ -94,7 +96,7 @@ export const TRAITS = {
   heavy: { name: 'Heavy', description: '+35% damage.', downside: '-15% fire rate.', scale: 1.35, cadence: .85 },
   searing: { name: 'Searing', description: 'Hits set the target burning.', burn: .5 },
   forked: { name: 'Forked', description: 'Each hit chains to one more enemy.', chains: 1 },
-  keen: { name: 'Keen', description: '+10% critical chance.', crit: .1 },
+  keen: { name: 'Keen', description: '+6% critical chance.', crit: .06 },
   chilling: { name: 'Chilling', description: 'Hits slow the target for 2 seconds.', chill: 2 },
   hunting: { name: 'Hunting', description: '+30% damage to elites and sovereigns.', hunter: .3 },
   volatile: { name: 'Volatile', description: 'Kills burst for 40% damage nearby.', burst: .4 },
@@ -109,7 +111,7 @@ export const MODS = {
   arc: { name: 'Arc emitter', short: '+1 arc', chains: 1 },
   incendiary: { name: 'Igniter', short: 'Hits burn', burn: .3 },
   cryo: { name: 'Coolant line', short: 'Hits slow', chill: 1.5 },
-  overpressure: { name: 'Overpressure', short: '+8% crit, harder crits', crit: .08, critPower: 1.2 },
+  overpressure: { name: 'Overpressure', short: '+5% crit, +10% crit dmg', crit: .05, critPower: 1.1 },
   ricochet: { name: 'Ricochet', short: 'Kills bounce 50%', bounce: .5 },
   shredder: { name: 'Shredder', short: '+50% vs shields', shred: .5 },
   reaper: { name: 'Culling edge', short: 'Executes below 8%', cull: .08 },
@@ -127,7 +129,7 @@ export const WEAPON_COMBOS = {
   manhunt: { name: 'Manhunt', trait: 'hunting', power: 'headhunter', description: 'Hunting weapons deal another +30% to elites and sovereigns.' },
   chainfire: { name: 'Chain fire', trait: 'volatile', power: 'bloom', description: 'Volatile bursts are twice as wide.' },
   overload: { name: 'Overload', trait: 'capacitor', power: 'overclock', description: 'Capacitor weapons charge every 3rd shot.' },
-  assassin: { name: 'Assassin', trait: 'keen', power: 'precision', description: 'Keen weapons get another +10% critical chance.' }
+  assassin: { name: 'Assassin', trait: 'keen', power: 'precision', description: 'Keen weapons get another +6% critical chance.' }
 };
 
 export function weaponComboActive(game, key) {
@@ -181,7 +183,7 @@ function comboBoost(game, mount, stats) {
   if (combo === 'hairtrigger') stats.cadence *= 1.15;
   if (combo === 'manhunt') stats.hunter += .3;
   if (combo === 'overload') stats.charge = 3;
-  if (combo === 'assassin') stats.crit += .1;
+  if (combo === 'assassin') stats.crit += .06;
   return stats;
 }
 
@@ -244,6 +246,57 @@ export function rollWeapon(game, exclude = []) {
   const item = { key: 'arm:' + weapon, weapon, grade: 1, trait, rolls: rollStats(game), mods: [] };
   setGrade({ random: game.random }, item, grade);
   return item;
+}
+
+// How each weapon behaves beyond its numbers, for the weapon info panel.
+export const WEAPON_HANDLING = {
+  bolt: 'Single target',
+  scatter: 'Cone, 2 more at 80%',
+  lance: 'Pierces 2 more at 85%',
+  coil: 'Arcs to 2 more',
+  mortar: 'Shell burst 9u at 70%',
+  cryo: 'Slows within 7u',
+  beam: 'Ramps to +120% on one target',
+  pulse: 'Hits all in reach, push every 3s'
+};
+
+const one = value => String(Number(value.toFixed(1)));
+const percent = value => Math.round(value * 100) + '%';
+
+// The numbers one fitted weapon actually fires with: shared tower stats bent by the
+// weapon's role, grade, rolls, trait and mods. Rows are [label, value].
+export function weaponReport(game, slot) {
+  const mount = game.armory.mounts[slot];
+  if (!validMount(mount)) return [];
+  const stats = mountStats(mount, game);
+  const role = ROLE_RULES[mount.key] || {};
+  const crit = Math.min(1, game.critChance + (role.crit || 0) + stats.crit);
+  const critDamage = criticalMultiplier(game) * (role.critPower || 1) * stats.critPower;
+  const splash = game.splash * (role.splash ?? 1);
+  const arcs = role.chain === 0 ? 0 : game.chain * (role.chain ?? 1) + stats.chains;
+  const rows = [
+    ['Damage', one(game.damage * stats.scale * MOUNT_OUTPUT[slot])],
+    ['Fire rate', (game.rate * stats.cadence).toFixed(2) + '/s'],
+    ['Range', one(game.range * stats.reach) + 'u'],
+    ['Crit', percent(crit)],
+    ['Crit dmg', one(critDamage) + 'x'],
+    ['Splash', role.splash === 0 ? 'None' : splash ? one(splash) + 'u' : 'Off'],
+    ['Arcs', role.chain === 0 ? 'None' : String(arcs)],
+    ['Output', percent(MOUNT_OUTPUT[slot])],
+    ['Handling', WEAPON_HANDLING[mount.key]]
+  ];
+  const extras = [];
+  if (stats.burn) extras.push('burns');
+  if (stats.chill) extras.push('slows');
+  if (stats.hunter) extras.push('+' + percent(stats.hunter) + ' elites');
+  if (stats.burst) extras.push('kill burst');
+  if (stats.bounce) extras.push('kills bounce');
+  if (stats.shred) extras.push('+' + percent(stats.shred) + ' shields');
+  if (stats.cull) extras.push('executes <' + percent(stats.cull));
+  if (stats.twin) extras.push(percent(stats.twin) + ' double shot');
+  if (stats.charge) extras.push('every ' + stats.charge + 'th shot +150%');
+  if (extras.length) rows.push(['Extras', extras.join(', ')]);
+  return rows;
 }
 
 export function maxWeaponRange(game) {
@@ -351,8 +404,8 @@ function fireMount(game, mount, slot, stats, target, reach, bonus = 1) {
     if (game.relicState.echo === 0) scale *= 2;
   }
   if (mount.key === 'beam') {
-    mount.focus = mount.lock === target.id ? Math.min(Math.round(BEAM_MAX / BEAM_RAMP), (mount.focus || 0) + 1) : 0;
-    mount.lock = target.id;
+    mount.focus = mount.beamLock === target.id ? Math.min(Math.round(BEAM_MAX / BEAM_RAMP), (mount.focus || 0) + 1) : 0;
+    mount.beamLock = target.id;
     scale *= 1 + BEAM_RAMP * mount.focus;
   }
   if (stats.hunter && (target.elite || target.boss)) scale *= 1 + stats.hunter;
@@ -418,15 +471,23 @@ function fireMount(game, mount, slot, stats, target, reach, bonus = 1) {
 }
 
 export function fireMounts(game, dt) {
+  // Overcharger stalls every weapon briefly; cooldowns still run down meanwhile.
+  const stall = stalled(game);
+  let lead = null;
   for (const [slot, mount] of game.armory.mounts.entries()) {
     mount.cooldown = Math.max(0, mount.cooldown - dt);
-    if (mount.cooldown > 0) continue;
+    if (slot === 0 && game.powers?.linked) lead = game.enemies.find(e => e.id === mount.lock && e.hp > 0) || null;
+    if (mount.cooldown > 0 || stall) continue;
     const stats = mountStats(mount, game);
     const reach = game.range * stats.reach;
-    const focused = game.focusId && game.enemies.find(e => e.id === game.focusId && e.hp > 0 && Math.hypot(e.x, e.y) <= reach);
-    const target = focused || game.nearest({x: 0, y: 0}, reach);
+    const inReach = e => e && e.hp > 0 && Math.hypot(e.x, e.y) <= reach;
+    const focused = game.focusId && game.enemies.find(e => e.id === game.focusId && inReach(e));
+    // Fire link: aux weapons join the primary weapon's target and hit harder.
+    const linked = slot > 0 && game.powers?.linked && inReach(lead) ? lead : null;
+    const target = focused || linked || game.nearest({x: 0, y: 0}, reach);
     if (!target) continue;
-    fireMount(game, mount, slot, stats, target, reach);
+    if (slot === 0) { mount.lock = target.id; lead = target; }
+    fireMount(game, mount, slot, stats, target, reach, slot > 0 && game.powers?.linked ? 1.25 : 1);
     if (stats.twin && game.random() < stats.twin) {
       const again = target.hp > 0 ? target : game.nearest({x: 0, y: 0}, reach);
       if (again) fireMount(game, mount, slot, stats, again, reach);

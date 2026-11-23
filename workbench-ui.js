@@ -1,6 +1,6 @@
-import { $, element, pad, setText, setTier } from './ui.js?v=3.11.0';
-import { forgeWeapon, foundry, openCache, workshopCosts } from './workshop.js?v=3.11.0';
-import { WEAPONS, TRAITS, MOUNT_OUTPUT, HARDPOINT_BOSSES, GRADE_NAMES, MAX_GRADE, MOD_GRADES, mountStats, mountTitle, describeMount } from './weapons.js?v=3.11.0';
+import { $, element, pad, setText, setTier } from './ui.js?v=3.12.0';
+import { forgeWeapon, foundry, openCache, workshopCosts } from './workshop.js?v=3.12.0';
+import { WEAPONS, TRAITS, MOUNT_OUTPUT, HARDPOINT_BOSSES, GRADE_NAMES, MAX_GRADE, MOD_GRADES, mountStats, mountTitle, describeMount, weaponReport } from './weapons.js?v=3.12.0';
 
 export const SERVICES = {
   caches: { name: 'Big cache', icon: '  ____ \n /___/|\n |___|/' },
@@ -30,7 +30,7 @@ function meter(mount, stats, game) {
   return '[' + '#'.repeat(ready) + '-'.repeat(METER - ready) + ']';
 }
 
-export function workbench(game, {changed}) {
+export function workbench(game, {changed, inspect}) {
   function transact(key) {
     if (!['running','paused'].includes(game.status)) return;
     const ok = key === 'caches' ? (game.workshop.caches ? openCache(game) : foundry(game, 'commission')) : key.startsWith('forge:') ? forgeWeapon(game, Number(key.slice(6))) : foundry(game,key);
@@ -38,7 +38,8 @@ export function workbench(game, {changed}) {
   }
   const hardpoints = MOUNT_OUTPUT.map((_, slot) => {
     const locked = row(null, 'hardpoint-row vacant');
-    const fitted = row(() => transact('forge:' + slot), 'hardpoint-row');
+    // Clicking a weapon opens its stats in the Inspector; clicking its price forges it.
+    const fitted = row(event => event.target.closest('.cost') ? transact('forge:' + slot) : inspect?.(slot), 'hardpoint-row');
     return { slot, locked, fitted };
   });
   const services = Object.keys(SERVICES).map(key => ({ key, control: row(() => transact(key), 'service-row') }));
@@ -77,12 +78,14 @@ export function workbench(game, {changed}) {
         setTier(fitted.name, GRADE_NAMES[mount.grade - 1]);
         setText(fitted.detail, place + ' / ' + share + ' ' + meter(mount, stats, game));
         setText(fitted.action, Number.isFinite(cost) ? '[ $' + cost + ' ]' : '[ Max ]');
-        fitted.button.disabled = !active || !Number.isFinite(cost) || cost > game.scrap;
+        fitted.button.disabled = false;
+        fitted.button.classList.toggle('cant-forge', !active || !Number.isFinite(cost) || cost > game.scrap);
         const nextMod = MOD_GRADES.find(at => at > mount.grade);
         const forgeHelp = Number.isFinite(cost) ? ' Forge to G' + (mount.grade + 1) + (nextMod === mount.grade + 1 ? ', which rolls a new mod' : '') + '.' : '';
         const rolls = describeMount(mount);
         const downside = [TRAITS[mount.trait]?.downside, WEAPONS[mount.key].downside].filter(Boolean).join(' ');
-        fitted.button.title = WEAPONS[mount.key].description + (downside ? ' Downside: ' + downside : '') + (rolls ? ' ' + rolls + '.' : '') + forgeHelp;
+        const report = weaponReport(game, slot).slice(0, 6).map(([label, value]) => label + ' ' + value).join(' / ');
+        fitted.button.title = WEAPONS[mount.key].description + (downside ? ' Downside: ' + downside : '') + '\n' + report + (rolls ? '\n' + rolls + '.' : '') + '\nClick for stats.' + (forgeHelp ? ' Click the price:' + forgeHelp : '');
         fitted.button.classList.remove('vacant');
       } else {
         setText(fitted.icon, EMPTY_ICON);
@@ -91,6 +94,7 @@ export function workbench(game, {changed}) {
         setText(fitted.detail, place + ' / ' + share + ' / next weapon fits here');
         setText(fitted.action, '[ Empty ]');
         fitted.button.disabled = true;
+        fitted.button.classList.remove('cant-forge');
         fitted.button.title = '';
         fitted.button.classList.add('vacant');
       }
@@ -109,7 +113,7 @@ export function workbench(game, {changed}) {
         help = ws.caches ? 'Open a big cache and pick one of three.' : 'Order a big cache. Elites and bosses also drop them.';
         disabled = !ws.caches && (!Number.isFinite(order) || order > game.scrap);
       } else {
-        detail = key === 'repair' ? 'Restore 35% integrity' : key === 'tune' ? 'R' + pad(ws.tunes) + (ws.tunes < 12 ? ' / +2 dmg +2% rate' : ' / +1 dmg +1% rate')
+        detail = key === 'repair' ? 'Restore 35% integrity' : key === 'tune' ? 'R' + pad(ws.tunes) + (ws.tunes < 12 ? ' / +2 dmg +0.02/s' : ' / +1 dmg +0.01/s')
           : key === 'relic' ? 'Pick 1 of 3 relics' : 'Buy a big cache';
         action = Number.isFinite(cost) ? '[ $' + cost + ' ]' : key === 'repair' ? '[ Full ]' : '[ Max ]';
         help = key === 'tune' ? 'Permanently increase damage and fire rate for this run. No rank limit. Ranks past 12 give half.' :

@@ -1,11 +1,11 @@
-import { ENEMIES, UPGRADES, POWERS, DOCTRINES, BLUEPRINTS, SYNERGIES, RUN_PROFILES } from './content.js?v=3.11.0';
-import { restoreCheckpoint, clearCheckpoint } from './checkpoint.js?v=3.11.0';
+import { ENEMIES, UPGRADES, POWERS, DOCTRINES, BLUEPRINTS, SYNERGIES, RUN_PROFILES } from './content.js?v=3.12.0';
+import { restoreCheckpoint, clearCheckpoint } from './checkpoint.js?v=3.12.0';
 
-import { createWorkshop, awardSalvage, pickBlueprint } from './workshop.js?v=3.11.0';
-import { earnHardpoint, initWeapons, WEAPONS, fireMounts, spreadFire } from './weapons.js?v=3.11.0';
-import * as Relics from './relic-effects.js?v=3.11.0';
-import { applyEliteTrait, rollEliteTrait, cursed } from './hazards.js?v=3.11.0';
-import { applyPerks } from './perks.js?v=3.11.0';
+import { createWorkshop, awardSalvage, pickBlueprint } from './workshop.js?v=3.12.0';
+import { earnHardpoint, initWeapons, WEAPONS, fireMounts, spreadFire } from './weapons.js?v=3.12.0';
+import * as Relics from './relic-effects.js?v=3.12.0';
+import { applyEliteTrait, rollEliteTrait, cursed } from './hazards.js?v=3.12.0';
+import { applyPerks } from './perks.js?v=3.12.0';
 
 export { ENEMIES, UPGRADES, POWERS, DOCTRINES, BLUEPRINTS, SYNERGIES, RUN_PROFILES };
 export const WORLD = Object.freeze({ x: 140, y: 84 });
@@ -13,14 +13,20 @@ export const WORLD = Object.freeze({ x: 140, y: 84 });
 const SAVE_KEY = 'last-spire.records.v1';
 const DAILY_KEY = 'last-spire.daily.v1';
 const HIT_RADIUS = 4;
-const DRAFT_PERIOD = 120;
+// One relic draft every three minutes. A sovereign kill makes the next one rare.
+export const DRAFT_PERIOD = 180;
 const BOSS_PERIOD = 180;
 const BOSS_NOTICE = 12;
-const RATE_STEP = 1.17;
+// Fire rate levels add flat shots per second, like Impact adds flat damage.
+const RATE_STEP = .15;
 const DAMAGE_STEP = 2;
 const TUNE_FULL = 12;
 // Late hostiles harden more slowly than before, to match the gentler power curve.
-const ENDURANCE_PACE = 100;
+const ENDURANCE_PACE = 135;
+// From minute 20 hostiles keep getting tougher and hit harder every minute, so even a
+// complete build is eventually overrun instead of idling through an endless late game.
+export const OVERRUN_AT = 1200;
+const OVERRUN_STEP = 1.1;
 const BASE_LEVELS = { range: 1, rate: 1, damage: 1, splash: 0, crit: 0, chain: 0, armor: 0, regen: 0, bounty: 0,
   lethality: 0, incendiary: 0, chill: 0, hunter: 0, barrier: 0, salvage: 0 };
 // Share of the relic pool a run can draw from, so no two runs offer the same relics.
@@ -181,6 +187,7 @@ export class Game {
     this.queue = [];
     this.draftReason = null;
     this.starterReady = true;
+    this.rareDraft = false;
     this.nextDraft = DRAFT_PERIOD;
     this.nextBoss = 160;
     this.warning = null;
@@ -214,6 +221,9 @@ export class Game {
 
   get encounter() { return RUN_PROFILES[this.profile]; }
 
+  // Late-game pressure: x1.1 health and impact for every minute past minute 20.
+  get overrun() { return OVERRUN_STEP ** (Math.max(0, this.time - OVERRUN_AT) / 60); }
+
   // Levels past an upgrade's original cap count for half.
   level(key) {
     const level = this.levels[key] || 0, soft = UPGRADES[key]?.soft ?? Infinity;
@@ -222,9 +232,9 @@ export class Game {
 
   get range() { return Relics.stat(this, 'range', 37 + 4.5 * (this.level('range') - 1) + this.bonus.range + 12 * (this.powers.scope || 0)); }
   get rate() {
-    const base = .85 * RATE_STEP ** (this.level('rate') - 1) + this.bonus.rate;
+    const base = .85 + RATE_STEP * (this.level('rate') - 1) + this.bonus.rate + .01 * this.tuneRanks;
     const curses = (cursed(this, 'hunger') ? 1.25 : 1) * (cursed(this, 'frenzy') ? 1.3 : 1);
-    return Relics.stat(this, 'rate', base * (1 + .01 * this.tuneRanks)) * curses;
+    return Relics.stat(this, 'rate', base) * curses;
   }
   get damage() {
     const base = 8 + DAMAGE_STEP * (this.level('damage') - 1) + this.bonus.damage + (this.powers.reactor || 0);
@@ -236,7 +246,7 @@ export class Game {
     return tunes + Math.min(tunes, TUNE_FULL);
   }
   get splash() { return Relics.stat(this, 'splash', (this.levels.splash ? 5 + 1.7 * this.level('splash') : 0) + 8 * (this.powers.fracture || 0)); }
-  get critChance() { return Relics.stat(this, 'critChance', this.level('crit') * .075); }
+  get critChance() { return Relics.stat(this, 'critChance', this.level('crit') * .04); }
   get chain() { return Relics.stat(this, 'chain', Math.floor(this.level('chain')) + (this.powers.tesla || 0) + Number(this.synergyActive('rimewire'))); }
   get armor() { return cursed(this, 'rust') ? Relics.stat(this, 'armor', 0) : Relics.stat(this, 'armor', this.level('armor') * 1.5); }
   get regen() { return Relics.stat(this, 'regen', this.level('regen') * .20); }
@@ -349,14 +359,10 @@ export class Game {
 
   pickPower(key) {
     if (this.status !== 'draft' || !this.choices.includes(key)) return false;
-    this.powers[key] = (this.powers[key] || 0) + 1;
-    if (key === 'reservoir') { this.maxHp += 12; this.hp += 12; }
-    if (key === 'interest') this.scrap += 25 + this.threat * 5;
-    if (key === 'repulse') this.pulseAt = this.time + (this.powers.repulse > 1 ? 7 : 10);
-    if (key === 'ward') this.wardAt = this.time;
-    Relics.onPick(this, key);
+    this.install(key);
     this.note(`Relic installed: ${POWERS[key].name}.`, 'upgrade');
     if (key === 'wildcard') for (let i = 0; i < 2; i++) this.wildRelic();
+    if (key === 'mimic') this.mimicRelic();
     this.noteSynergies(key);
     this.choices = [];
     this.draftReason = null;
@@ -365,14 +371,37 @@ export class Game {
     return true;
   }
 
+  // Add one rank of a relic and run its one-time effects.
+  install(key) {
+    this.powers[key] = (this.powers[key] || 0) + 1;
+    if (key === 'reservoir') { this.maxHp += 12; this.hp += 12; }
+    if (key === 'interest') this.scrap += 25 + this.threat * 5;
+    if (key === 'repulse') this.pulseAt = this.time + (this.powers.repulse > 1 ? 7 : 10);
+    if (key === 'ward') this.wardAt = this.time;
+    Relics.onPick(this, key);
+  }
+
+  // Mimic: copy the most recent relic that still has room for another rank.
+  mimicRelic() {
+    const copy = Object.keys(this.powers).reverse().find(key => key !== 'mimic' && this.powers[key] > 0
+      && (POWERS[key].maxStacks == null || this.powers[key] < POWERS[key].maxStacks));
+    if (!copy) {
+      this.scrap += 60;
+      this.note('Mimic found nothing to copy. +60 scrap.', 'upgrade');
+      return;
+    }
+    this.install(copy);
+    this.note(`Mimic copied ${POWERS[copy].name}.`, 'upgrade');
+    this.noteSynergies(copy);
+  }
+
   // Wild card: install a random ordinary relic that still has room to stack.
   wildRelic() {
     const pool = Object.keys(POWERS).filter(key => !POWERS[key].rare && !POWERS[key].reserve && this.inDeck(key)
       && (!POWERS[key].maxStacks || (this.powers[key] || 0) < POWERS[key].maxStacks));
     if (!pool.length) return;
     const key = pool[Math.min(pool.length - 1, Math.floor(this.random() * pool.length))];
-    this.powers[key] = (this.powers[key] || 0) + 1;
-    Relics.onPick(this, key);
+    this.install(key);
     this.note(`Wild card: ${POWERS[key].name}.`, 'upgrade');
     this.noteSynergies(key);
   }
@@ -382,8 +411,8 @@ export class Game {
     const profile = ENEMIES[type];
     // Smooth growth keeps later minutes responsive to loadout strength and salvage luck.
     const reinforcement = this.time / (this.time + 600);
-    const endurance = 1 + this.time / 420 + (this.time / 420) ** 2 + (this.time / ENDURANCE_PACE) ** 3 * reinforcement ** 4;
-    const scale = this.encounter.hp * endurance;
+    const endurance = 1 + this.time / 480 + (this.time / 480) ** 2 + (this.time / ENDURANCE_PACE) ** 3 * reinforcement ** 4;
+    const scale = this.encounter.hp * endurance * this.overrun;
     const debt = type === 'sovereign' && cursed(this, 'debt') ? 1.3 : 1;
     const maxHp = Math.max(1, Math.round(profile.hp * scale * (mini ? .47 : elite ? 2.25 : 1) * (cursed(this, 'greed') ? 1.15 : 1) * debt));
     const speed = profile.speed * this.encounter.speed * 1.36 * (1 + Math.min(.75, this.time / 750)) * (mini ? 1.22 : elite ? 1.08 : 1)
@@ -391,7 +420,7 @@ export class Game {
     const maxShield = type === 'aegis' ? Math.round(maxHp * .48) : 0;
     const enemy = {
       id: `e${this.nextId++}`, type, x, y, hp: maxHp, maxHp, speed,
-      damage: Math.max(1, Math.round(profile.damage * this.encounter.damage * (mini ? .45 : elite ? 1.6 : 1) * (1 + this.time / 1200))),
+      damage: Math.max(1, Math.round(profile.damage * this.encounter.damage * (mini ? .45 : elite ? 1.6 : 1) * (1 + this.time / 1200) * this.overrun)),
       reward: mini ? 1 : profile.reward * (elite ? 2 : 1), tier: Math.min(4, profile.tier + Number(elite)),
       boss: type === 'sovereign', elite, mini, shield: maxShield, maxShield,
       lastHit: -1000, slowUntil: 0, burnUntil: 0, burnDps: 0, pulseAt: this.time + 5, phaseOffset: this.random() * 7,
@@ -485,7 +514,8 @@ export class Game {
       this.time = this.nextDraft;
       this.nextDraft += DRAFT_PERIOD;
       this.starterReady = false;
-      this.queue.unshift('time');
+      this.queue.unshift(this.rareDraft ? 'boss' : 'time');
+      this.rareDraft = false;
     }
     if (this.queue.length) this.openDraft(this.queue.shift());
   }
@@ -512,7 +542,7 @@ export class Game {
       }
     }
     const gap = distance(enemy, CORE);
-    let speed = enemy.speed * (this.time < enemy.slowUntil ? .65 : 1);
+    let speed = enemy.speed * (this.time < enemy.slowUntil ? .65 : 1) * (this.time < enemy.chillUntil ? 1 - enemy.chill : 1);
     if (enemy.type === 'wraith' && (this.time + enemy.phaseOffset) % 6.5 < 1.2) speed *= 2.1;
     if (enemy.type === 'moth' && gap < 32) speed *= 1.4;
     speed = Relics.speed(this, enemy, speed);
@@ -573,7 +603,12 @@ export class Game {
     amount *= Relics.hitFactor(this, enemy, direct);
     this.hurt(enemy, amount);
     if (this.powers.frost) enemy.slowUntil = Math.max(enemy.slowUntil, this.time + (this.powers.frost > 1 ? 5 : 3));
-    if (direct && this.levels.chill && enemy.hp > 0 && this.random() < .07 * this.levels.chill) enemy.slowUntil = Math.max(enemy.slowUntil, this.time + 2.5);
+    // Chill: a small slow of its own that stacks with every other slow.
+    if (direct && this.levels.chill && enemy.hp > 0) {
+      enemy.chill = .03 * this.level('chill');
+      enemy.chillUntil = this.time + 2;
+    }
+    if (enemy.hp > 0) Relics.onStrike(this, enemy, direct);
     const burn = (this.powers.ember ? (this.powers.ember > 1 ? 1 : .6) : 0) + .08 * (this.levels.incendiary || 0);
     if (ignite && burn && enemy.hp > 0) {
       const remaining = Math.max(0, enemy.burnUntil - this.time) * enemy.burnDps;
@@ -664,9 +699,9 @@ export class Game {
     if (enemy.boss) {
       this.bossKills++;
       earnHardpoint(this);
-      this.queue.push('boss');
+      this.rareDraft = true;
       this.effect(enemy.x, enemy.y, 'bossfall', 22, 1);
-      this.note('Sovereign defeated. Rare relic recovered.', 'boss');
+      this.note('Sovereign defeated. The next relic draft is rare.', 'boss');
     }
   }
 

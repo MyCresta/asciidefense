@@ -123,3 +123,24 @@ test('every relic, combo, curse, trait and mod runs in combat and survives a che
     assert.deepEqual(snapshotCombat(start(1, storage, true)), snapshotCombat(game));
   }
 });
+
+test('Chill is a small stacking slow, and Mimic copies the latest relic with room', async () => {
+  const { start } = await import('./support/gameplay.mjs');
+  const game = start(41);
+  game.nextDraft = game.nextBoss = 1e6;
+  game.enemies = [];
+  game.levels.chill = 4;
+  const target = game.spawn('brute', 30, 0);
+  game.strike(target, 1, true);
+  assert.ok(Math.abs(target.chill - .12) < 1e-9 && target.chillUntil > game.time);
+  const before = Math.hypot(target.x, target.y);
+  game.advance(target, 1);
+  assert.ok(Math.abs(before - Math.hypot(target.x, target.y) - target.speed * .88) < 1e-9);
+
+  game.powers = { overclock: 1, scope: 3 };
+  game.choices = ['mimic', 'reaper', 'ricochet'];
+  game.status = 'draft';
+  assert.equal(game.pickPower('mimic'), true);
+  assert.equal(game.powers.overclock, 2);
+  assert.equal(game.powers.scope, 3);
+});

@@ -1,19 +1,20 @@
-import { SPEEDS, SimulationClock } from './clock.js?v=3.11.0';
-import { initAppearance } from './appearance.js?v=3.11.0';
-import { workbench } from './workbench-ui.js?v=3.11.0';
-import { pickBlueprint, fitChoices, workshopCosts, offerStartingArms } from './workshop.js?v=3.11.0';
-import { maxWeaponRange, mountStats, mountTitle, WEAPON_COMBOS, weaponComboActive } from './weapons.js?v=3.11.0';
-import { Game, formatTime } from './engine.js?v=3.11.0';
-import { ELITE_TRAITS, CURSES } from './hazards.js?v=3.11.0';
-import { ENEMIES, POWERS, RUN_PROFILES, SYNERGIES, UPGRADES } from './content.js?v=3.11.0';
-import { TITLE, PORTRAIT, ENEMY_PORTRAITS } from './art.js?v=3.11.0';
-import { Field, ART_STYLES } from './field.js?v=3.11.0';
-import { initPixelUI } from './pixel-ui.js?v=3.11.0';
-import { paintPortrait } from './pixel-art.js?v=3.11.0';
-import { fillVectorElement } from './vector-art.js?v=3.11.0';
-import { saveCheckpoint } from './checkpoint.js?v=3.11.0';
-import { runPanels } from './run-panels.js?v=3.11.0';
-import { $, pad, decorateFrame, drawStats, element, setText, tierName, setTier, withDownside } from './ui.js?v=3.11.0';
+import { SPEEDS, SimulationClock } from './clock.js?v=3.12.0';
+import { initAppearance } from './appearance.js?v=3.12.0';
+import { workbench } from './workbench-ui.js?v=3.12.0';
+import { pickBlueprint, fitChoices, workshopCosts, offerStartingArms, forgeWeapon } from './workshop.js?v=3.12.0';
+import { maxWeaponRange, mountStats, mountTitle, describeMount, weaponReport, WEAPONS, TRAITS, GRADE_NAMES, WEAPON_COMBOS, weaponComboActive } from './weapons.js?v=3.12.0';
+import { criticalMultiplier, cooldowns } from './relic-effects.js?v=3.12.0';
+import { Game, formatTime, OVERRUN_AT } from './engine.js?v=3.12.0';
+import { ELITE_TRAITS, CURSES } from './hazards.js?v=3.12.0';
+import { ENEMIES, POWERS, RUN_PROFILES, SYNERGIES, UPGRADES } from './content.js?v=3.12.0';
+import { TITLE, PORTRAIT, ENEMY_PORTRAITS } from './art.js?v=3.12.0';
+import { Field, ART_STYLES } from './field.js?v=3.12.0';
+import { initPixelUI } from './pixel-ui.js?v=3.12.0';
+import { paintPortrait } from './pixel-art.js?v=3.12.0';
+import { fillVectorElement } from './vector-art.js?v=3.12.0';
+import { saveCheckpoint } from './checkpoint.js?v=3.12.0';
+import { runPanels } from './run-panels.js?v=3.12.0';
+import { $, pad, decorateFrame, drawStats, element, setText, tierName, setTier, withDownside } from './ui.js?v=3.12.0';
 
 const root = document.documentElement;
 function preference(key, fallback) {
@@ -83,7 +84,7 @@ $('art-button').addEventListener('click', () => {
   savePreference('art', next);
   applyArt(next, true);
 });
-const shop = workbench(game, {changed: commitAction});
+const shop = workbench(game, {changed: commitAction, inspect: slot => inspectWeapon(slot)});
 function updateSpeed() {
   for (const button of $('speed-controls').children) {
     if (button.dataset.speed) button.setAttribute('aria-pressed',String(Number(button.dataset.speed) === speed));
@@ -184,74 +185,106 @@ $('tab-inspector').addEventListener('click', () => selectTab(true));
 $('tab-upgrades').addEventListener('click', () => selectTab(false));
 function inspect(id) {
   if (!game.inspect(id)) return;
+  inspectedWeapon = null;
   selectTab(true);
   renderInspector();
   setText($('announcer'), 'Inspecting ' + $('entity-name').textContent);
   playTone(360, 0.035);
 }
 
+// The Inspector shows the Spire's main numbers, a selected hostile, or one fitted weapon.
+let inspectedWeapon = null;
+const freshStat = {};
+let shownStats = { key: '', values: {} };
+function spireStats() {
+  const main = game.armory.mounts[0];
+  const stats = mountStats(main, game);
+  return [
+    ['Damage', concise(game.damage)], ['Fire rate', (game.rate * stats.cadence).toFixed(2) + '/s'],
+    ['Range', concise(maxWeaponRange(game)) + 'u'], ['Crit', Math.round(100 * Math.min(1, game.critChance)) + '%'],
+    ['Crit dmg', concise(criticalMultiplier(game)) + 'x'], ['Splash', game.splash ? concise(game.splash) + 'u' : 'Off'],
+    ['Arcs', String(game.chain)], ['Armor', concise(game.armor)],
+    ['Repair', concise(game.regen) + '/s'], game.barrier >= 1 || game.levels.barrier ? ['Barrier', Math.floor(game.barrier) + ''] : ['Bounty', '+' + Math.round(100 * game.bounty) + '%']
+  ];
+}
+function inspectWeapon(slot) {
+  if (!game.armory.mounts[slot]) return;
+  game.inspect('tower');
+  inspectedWeapon = slot;
+  selectTab(true);
+  renderInspector();
+  setText($('announcer'), 'Inspecting ' + $('entity-name').textContent);
+}
 function renderInspector() {
   const enemy = game.enemies.find(e => e.id === game.selected);
+  if (enemy || !game.armory.mounts[inspectedWeapon]) inspectedWeapon = null;
+  const mount = inspectedWeapon === null ? null : game.armory.mounts[inspectedWeapon];
   const type = enemy && ENEMIES[enemy.type];
-  const flags = enemy && [ELITE_TRAITS[enemy.trait]?.name || '', enemy.shield > 0 ? 'Shield ' + Math.ceil(enemy.shield) : '', enemy.burnUntil > game.time ? 'Burning' : '', enemy.slowUntil > game.time ? 'Slowed' : ''].filter(Boolean);
+  const flags = enemy && [ELITE_TRAITS[enemy.trait]?.name || '', enemy.shield > 0 ? 'Shield ' + Math.ceil(enemy.shield) : '', enemy.burnUntil > game.time ? 'Burning' : '',
+    enemy.slowUntil > game.time || enemy.chillUntil > game.time ? 'Slowed' : '', enemy.markUntil > game.time ? 'Marked' : ''].filter(Boolean);
   const stats = enemy
     ? [['Integrity', Math.ceil(enemy.hp) + '/' + Math.ceil(enemy.maxHp)], ['Impact', enemy.damage + ' HP'], [flags.length ? 'Status' : 'Speed', flags.length ? flags.join(' / ') : concise(enemy.speed) + ' u/s'], ['Bounty', '$' + enemy.reward]]
-    : [['Damage', concise(game.damage) + ' HP'], ['Max reach', concise(maxWeaponRange(game)) + ' u'], ['Main rate', (game.rate * mountStats(game.armory.mounts[0], game).cadence).toFixed(2) + '/s'], game.barrier >= 1 || game.levels.barrier ? ['Barrier', Math.floor(game.barrier) + ' HP'] : ['Splash', game.splash ? concise(game.splash) + ' u' : 'Off']];
-  const signature = [root.dataset.theme, enemy?.id || 'tower', enemy?.tier, game.doctrine, mountTitle(game.armory.mounts[0]), game.focusId, JSON.stringify(stats)].join('/');
+    : mount ? weaponReport(game, inspectedWeapon) : spireStats();
+  const forge = mount ? workshopCosts(game).forge[inspectedWeapon] : null;
+  const signature = [root.dataset.theme, enemy?.id || (mount ? 'weapon' + inspectedWeapon : 'tower'), enemy?.tier, mount && mountTitle(mount), mountTitle(game.armory.mounts[0]), game.focusId, forge, game.scrap >= forge, game.status, JSON.stringify(stats)].join('/');
   if (signature === inspectedSnapshot) return;
   inspectedSnapshot = signature;
+  document.querySelector('.portrait-area').classList.toggle('weapon-view', Boolean(mount));
+  $('weapon-portrait').hidden = !mount;
+  if (mount) setText($('weapon-portrait'), WEAPONS[mount.key].icon);
   setText($('portrait'), (enemy ? ENEMY_PORTRAITS[enemy.type] : PORTRAIT).join('\n'));
   paintPortrait($('portrait-pixel'), enemy ? enemy.type : 'tower');
   fillVectorElement($('portrait-vector'), enemy ? enemy.type : 'tower');
-  setText($('entity-class'), enemy ? (enemy.boss ? '[!] BOSS' : enemy.elite ? '[!] ELITE' : '[-] HOSTILE') : '[+] FRIENDLY');
-  setText($('entity-name'), enemy ? type.name + (enemy.rank > 1 ? ' ' + tierName(Math.min(4, enemy.rank)) : '') : 'The Spire');
-  setText($('entity-type'), enemy ? 'Tier ' + tierName(enemy.tier) + ' / ' + type.trait : mountTitle(game.armory.mounts[0]));
-  $('entity-type').title = (type?.description || 'Prioritizes the closest hostile in range.') + (enemy?.trait ? ' ' + ELITE_TRAITS[enemy.trait].description : '');
-  setText($('inspect-action'), enemy ? game.focusId === enemy.id ? '[ Release ]' : '[ Focus fire ]' : '[ Build ]');
-  $('inspect-action').setAttribute('aria-haspopup', enemy ? 'false' : 'dialog');
-  $('inspect-action').setAttribute('aria-label', enemy ? game.focusId === enemy.id ? 'Release focus fire' : 'Focus fire on ' + type.name : 'Inspect tower build');
-  drawStats($('entity-stats'),stats,true);
-}
-// The Spire's build: every upgrade level, relic and curse, with fresh gains lit up briefly.
-let buildSignature = '', seenLevels = null, seenRun = null;
-const freshUntil = {};
-function renderBuild() {
-  const box = $('build-list');
+  setText($('entity-class'), enemy ? (enemy.boss ? '[!] BOSS' : enemy.elite ? '[!] ELITE' : '[-] HOSTILE') : mount ? '[+] ' + (inspectedWeapon ? 'AUX ' + inspectedWeapon : 'PRIMARY') : '[+] FRIENDLY');
+  setText($('entity-name'), enemy ? type.name + (enemy.rank > 1 ? ' ' + tierName(Math.min(4, enemy.rank)) : '') : mount ? mountTitle(mount) : 'The Spire');
+  setTier($('entity-name'), mount ? GRADE_NAMES[mount.grade - 1] : 'standard');
+  setText($('entity-type'), enemy ? 'Tier ' + tierName(enemy.tier) + ' / ' + type.trait : mount ? WEAPONS[mount.key].role.toLowerCase() : mountTitle(game.armory.mounts[0]));
+  $('entity-type').title = enemy ? type.description + (enemy.trait ? ' ' + ELITE_TRAITS[enemy.trait].description : '')
+    : mount ? withDownside(WEAPONS[mount.key].description, [TRAITS[mount.trait]?.downside, WEAPONS[mount.key].downside].filter(Boolean).join(' ')) + (describeMount(mount) ? ' ' + describeMount(mount) + '.' : '')
+    : 'Prioritizes the closest hostile in range.';
+  const action = enemy ? (game.focusId === enemy.id ? '[ Release ]' : '[ Focus fire ]') : mount ? (Number.isFinite(forge) ? '[ Forge $' + forge + ' ]' : '[ Max grade ]') : '[ View build ]';
+  setText($('inspect-action'), action);
+  $('inspect-action').disabled = Boolean(mount) && (!Number.isFinite(forge) || forge > game.scrap || !['running', 'paused'].includes(game.status));
+  $('inspect-action').setAttribute('aria-haspopup', enemy || mount ? 'false' : 'dialog');
+  $('inspect-action').setAttribute('aria-label', enemy ? game.focusId === enemy.id ? 'Release focus fire' : 'Focus fire on ' + type.name : mount ? 'Forge ' + mountTitle(mount) : 'View build, relics and combos');
+  // Light up a Spire number briefly when it changes, so cache upgrades are easy to notice.
+  const key = enemy ? '' : mount ? 'weapon' + inspectedWeapon : 'tower';
   const now = performance.now();
-  if (seenRun !== game.run) { seenRun = game.run; seenLevels = null; }
-  if (seenLevels) for (const key in game.levels) if (game.levels[key] > seenLevels[key]) freshUntil[key] = now + 2400;
-  seenLevels = { ...game.levels };
-  box.hidden = game.selected !== 'tower';
-  if (box.hidden) return;
-  const fresh = Object.keys(freshUntil).filter(key => freshUntil[key] > now);
-  const relics = Object.keys(game.powers).filter(key => game.powers[key] > 0);
-  const signature = JSON.stringify([game.levels, relics.map(key => game.powers[key]), relics, game.curses, fresh]);
-  if (signature === buildSignature) return;
-  buildSignature = signature;
-  $('build-levels').replaceChildren(...Object.keys(UPGRADES).filter(key => game.levels[key] > 0).map(key => {
-    const chip = element('span', 'build-chip' + (fresh.includes(key) ? ' fresh' : ''));
-    chip.append(element('span', '', UPGRADES[key].label), element('b', '', String(game.levels[key])));
-    chip.title = UPGRADES[key].description;
-    return chip;
-  }));
-  const items = relics.map(key => {
-    const relic = POWERS[key], ranked = game.powers[key] > 1 && relic.next;
-    const item = element('li', '', relic.name + (ranked ? ' II' : game.powers[key] > 1 ? ' x' + game.powers[key] : ''));
-    item.title = withDownside(relic.description + (ranked ? ' ' + relic.next : ''), relic.downside);
-    setTier(item, ranked ? 'rare' : relic.rarity);
-    return item;
-  });
-  for (const key of game.curses || []) {
-    const item = element('li', 'cursed', CURSES[key].name);
-    item.title = CURSES[key].upside + '. ' + CURSES[key].downside + '.';
-    items.push(item);
+  if (key && key === shownStats.key) for (const [label, value] of stats) if (shownStats.values[label] !== undefined && shownStats.values[label] !== value) freshStat[label] = now + 2400;
+  shownStats = { key, values: Object.fromEntries(stats) };
+  $('entity-stats').classList.toggle('wide', !enemy);
+  drawStats($('entity-stats'), stats, true);
+  for (const row of $('entity-stats').children) {
+    if (key) row.classList.toggle('fresh', freshStat[row.firstChild.textContent] > now);
+    // Descriptions such as a weapon's handling get the full width.
+    row.classList.toggle('span', !enemy && row.lastChild.textContent.length > 10);
   }
-  $('build-relics').replaceChildren(...items);
 }
 $('inspect-action').addEventListener('click', () => {
+  if (game.selected === 'tower' && inspectedWeapon !== null) {
+    if (['running', 'paused'].includes(game.status) && forgeWeapon(game, inspectedWeapon)) commitAction();
+    return;
+  }
   if (game.selected === 'tower') return panels.showDossier('build');
   game.focus(game.selected); saveCheckpoint(game); refreshUI();
 });
+// Timed effects as a compact list in the battlefield corner: label, a small bar and seconds left.
+let cooldownSignature = '';
+function renderCooldowns() {
+  const list = cooldowns(game).slice(0, 8);
+  const rows = list.map(item => {
+    const text = item.spent ? 'used' : item.left <= 0.05 ? 'ready' : Math.ceil(item.left) + 's';
+    return [item.label, text, item.active ? 'active' : item.spent ? 'spent' : item.left <= .05 ? 'ready' : ''];
+  });
+  const signature = JSON.stringify(rows);
+  if (signature === cooldownSignature) return;
+  cooldownSignature = signature;
+  $('cooldowns').replaceChildren(...rows.map(([label, text, state]) => {
+    const row = element('li', state);
+    row.append(element('span', '', label), element('b', '', text));
+    return row;
+  }));
+}
 function renderLog() {
   if (logHead === game.log[0]) return;
   logHead = game.log[0];
@@ -299,7 +332,8 @@ const TIPS = [
   ['focus', () => game.time > 2, 'Click an enemy to focus fire on it.'],
   ['pause', () => game.time > 25, 'Space pauses and resumes.'],
   ['cache', () => game.workshop.caches > 0 && game.time > 8, 'Press C to open a big cache.'],
-  ['forge', () => game.scrap >= workshopCosts(game).forge[0], 'Click a weapon to forge it a grade higher.']
+  ['forge', () => game.scrap >= workshopCosts(game).forge[0], 'Click a weapon for its stats. Click its price to forge it.'],
+  ['overrun', () => game.time >= OVERRUN_AT, 'Overrun: hostiles now grow stronger every minute.']
 ];
 let tipsSeen = new Set(preference('tips', '').split(',').filter(Boolean));
 let tipShown = null, tipUntil = 0;
@@ -420,7 +454,8 @@ function renderHud() {
   setText($('available-scrap'), '$' + game.scrap);
   setText($('kills'), game.kills);
   setText($('threat'), pad(game.threat));
-  setText($('threat-label'), game.threat < 2 ? 'LOW' : game.threat < 4 ? 'RISING' : game.threat < 7 ? 'HIGH' : 'SEVERE');
+  setText($('threat-label'), game.time >= OVERRUN_AT ? 'OVERRUN' : game.threat < 2 ? 'LOW' : game.threat < 4 ? 'RISING' : game.threat < 7 ? 'HIGH' : 'SEVERE');
+  $('threat-label').title = game.time >= OVERRUN_AT ? 'Hostiles gain 10% health and impact every minute.' : '';
   setText($('run-number'), 'RUN ' + pad(game.run,3));
   if (lastProfile !== game.profile) {
     lastProfile = game.profile;
@@ -435,7 +470,7 @@ function renderHud() {
   if (game.hp < previousHp) playTone(100, 0.2, 'sawtooth');
   else if (game.kills > previousKills) playTone(230, 0.06, 'square');
   previousHp = game.hp; previousKills = game.kills;
-  renderInspector(); renderBuild(); renderLog(); updateStatus();
+  renderInspector(); renderCooldowns(); renderLog(); updateStatus();
 }
 function refreshUI() {
   previousFrame = undefined;

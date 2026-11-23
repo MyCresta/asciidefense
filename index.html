@@ -7,16 +7,16 @@
   <meta name="description" content="Defend the Last Spire in an endless, all-ASCII tower defense roguelike.">
   <title>Last Spire | ASCII Tower Defense</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="./style.css?v=3.11.0">
-  <link rel="stylesheet" href="./appearance.css?v=3.11.0">
-  <link rel="stylesheet" href="./art-styles.css?v=3.11.0">
+  <link rel="stylesheet" href="./style.css?v=3.12.0">
+  <link rel="stylesheet" href="./appearance.css?v=3.12.0">
+  <link rel="stylesheet" href="./art-styles.css?v=3.12.0">
   <link rel="preload" href="./fonts/spire-ascii-400.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="./fonts/spire-ascii-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="./fonts/spire-pixel-400.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="./fonts/spire-pixel-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="./fonts/spire-vector-400.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="./fonts/spire-vector-700.woff2" as="font" type="font/woff2" crossorigin>
-  <script type="module" src="./main.js?v=3.11.0"></script>
+  <script type="module" src="./main.js?v=3.12.0"></script>
 </head>
 <body>
   <main class="console">
@@ -51,6 +51,7 @@
         <div class="arena">
           <canvas id="field" tabindex="0" aria-label="Battlefield. Use arrow keys to cycle targets and Enter to inspect. Click or tap a unit to inspect it.">The Last Spire battlefield</canvas>
           <div id="siege-alert" class="siege-alert" hidden></div>
+          <ol id="cooldowns" class="cooldowns" aria-label="Timed effects"></ol>
           <div id="tip" class="tip" role="status" hidden><span><b>TIP</b> <span id="tip-text"></span></span><button id="tip-close" aria-label="Turn off tips">[x]</button></div>
           <div class="field-coords" aria-hidden="true">X <span id="coord-x">+000</span> &nbsp; Y <span id="coord-y">+000</span></div>
           <div class="field-toggles"><button id="numbers-toggle" aria-pressed="true">[x] Numbers</button><button id="range-toggle" aria-pressed="true">[x] Range</button></div>
@@ -82,9 +83,9 @@
       <aside class="side" aria-label="Tower management">
         <div class="mobile-tabs"><button id="tab-inspector" aria-pressed="false">[ Inspector ]</button><button id="tab-upgrades" aria-pressed="true">[ Workshop ]</button></div>
         <section class="frame inspector" aria-labelledby="inspect-title">
-          <div class="section-head"><h2 id="inspect-title"><i aria-hidden="true">//</i> Inspector</h2><button id="inspect-action" class="scope-action" aria-haspopup="dialog">[ Build ]</button></div>
+          <div class="section-head"><h2 id="inspect-title"><i aria-hidden="true">//</i> Inspector</h2><button id="inspect-action" class="scope-action" aria-haspopup="dialog">[ View build ]</button></div>
           <div class="entity-card">
-            <div class="portrait-area"><pre id="portrait" aria-hidden="true"></pre><canvas id="portrait-pixel" aria-hidden="true"></canvas><svg id="portrait-vector" aria-hidden="true"></svg></div>
+            <div class="portrait-area"><pre id="weapon-portrait" class="upgrade-icon weapon-portrait" aria-hidden="true" hidden></pre><pre id="portrait" aria-hidden="true"></pre><canvas id="portrait-pixel" aria-hidden="true"></canvas><svg id="portrait-vector" aria-hidden="true"></svg></div>
             <div class="entity-details">
               <span class="eyebrow" id="entity-class">FRIENDLY</span>
               <h3 id="entity-name">The Spire</h3>
@@ -92,10 +93,6 @@
             </div>
           </div>
           <dl class="entity-stats" id="entity-stats"></dl>
-          <div class="build-list" id="build-list" aria-label="Installed upgrades and relics">
-            <div class="build-levels" id="build-levels"></div>
-            <ul class="build-relics" id="build-relics"></ul>
-          </div>
         </section>
         <section class="frame upgrades" aria-labelledby="upgrade-title">
           <div class="section-head"><h2 id="upgrade-title"><i aria-hidden="true">//</i> Workshop</h2><span class="workshop-meta"><span id="mount-count" class="mount-count">ARMS 1/3</span> <span id="available-scrap" class="balance">$25</span></span></div>

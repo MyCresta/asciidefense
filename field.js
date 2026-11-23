@@ -1,6 +1,6 @@
-import { AsciiStyle } from './ascii-style.js?v=3.11.0';
-import { PixelStyle } from './pixel-style.js?v=3.11.0';
-import { VectorStyle } from './vector-style.js?v=3.11.0';
+import { AsciiStyle } from './ascii-style.js?v=3.12.0';
+import { PixelStyle } from './pixel-style.js?v=3.12.0';
+import { VectorStyle } from './vector-style.js?v=3.12.0';
 
 const HALF_WORLD_WIDTH = 140;
 const HALF_WORLD_HEIGHT = 84;

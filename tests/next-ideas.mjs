@@ -49,13 +49,14 @@ test('perks cost lifetime kills once and apply to normal runs but not the daily'
   assert.equal(game.workshop.caches, 1);
 });
 
-test('a fallen sovereign no longer offers a route choice', () => {
+test('a fallen sovereign offers no route choice and makes the next draft rare', () => {
   const game = quiet(3);
   const boss = game.spawn('sovereign', 20, 0);
   boss.hp = 0;
   game.resolveContacts();
   assert.equal(game.route, undefined);
-  assert.deepEqual(game.queue, ['boss']);
+  assert.deepEqual(game.queue, []);
+  assert.equal(game.rareDraft, true);
 });
 
 test('cursed cards trade a lasting upside for a lasting downside', () => {
