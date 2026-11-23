@@ -1,8 +1,8 @@
-import { AsciiStyle, surface } from './ascii-style.js?v=3.9.0';
-import { pixelPalette } from './pixel-art.js?v=3.9.0';
-import { VECTOR_ENEMIES, vectorSpire, paintVector } from './vector-art.js?v=3.9.0';
+import { AsciiStyle, surface } from './ascii-style.js?v=3.10.0';
+import { pixelPalette } from './pixel-art.js?v=3.10.0';
+import { VECTOR_ENEMIES, vectorSpire, paintVector } from './vector-art.js?v=3.10.0';
 
-export const VECTOR_FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+export const VECTOR_FONT = '"Spire Vector", "Spire ASCII", sans-serif';
 
 // Each symbol the ASCII style prints is drawn as a smooth stroke in the same cell.
 // Coordinates are in a unit cell centered on the glyph: x and y run from -1 to 1.
@@ -22,10 +22,11 @@ const shape = d => { if (!cache.has(d)) cache.set(d, new Path2D(d)); return cach
 export class VectorStyle extends AsciiStyle {
   static key = 'vector';
   static label = 'Vector';
+  static fontFamily = 'Spire Vector';
 
   font(size, weight = 'bold') {
     this.markSize = size;
-    this.ctx.font = `${weight === 400 ? 500 : 700} ${Math.round(size * 1.05)}px ${VECTOR_FONT}`;
+    this.ctx.font = `${weight === 400 ? 400 : 700} ${size}px ${VECTOR_FONT}`;
   }
 
   prepare() {

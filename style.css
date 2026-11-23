@@ -1,8 +1,13 @@
+/* All three art styles share one set of font metrics (see tools/build-fonts.py),
+   so text takes the same box in every style and a swap never moves the layout. */
+@font-face { font-family:"Spire ASCII"; src:url("./fonts/spire-ascii-400.woff2") format("woff2"); font-weight:100 549; font-display:block; }
+@font-face { font-family:"Spire ASCII"; src:url("./fonts/spire-ascii-700.woff2") format("woff2"); font-weight:550 1000; font-display:block; }
 :root {
   color-scheme: dark;
   --bg: #080a09; --surface: #0a0c0b; --ink: #e4e6df; --muted: #949b91;
   --faint: #41483f; --line: #51574c; --accent: #b9f571; --wash: #151b12;
-  --mono: "DejaVu Sans Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --ascii-mono: "Spire ASCII", "DejaVu Sans Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --mono: var(--ascii-mono);
   font-family: var(--mono); font-size: 16px; color: var(--ink); background: var(--bg);
 }
 :root[data-theme=mono] { --bg:#080808; --surface:#0b0b0b; --ink:#eee; --muted:#a4a4a4; --faint:#454545; --line:#5a5a5a; --accent:#fff; --wash:#1d1d1d; }
@@ -23,7 +28,7 @@ pre { font-family:var(--mono); }
 .console { height:100vh; height:100dvh; min-height:620px; padding:22px clamp(16px,2.2vw,40px) 10px; display:grid; grid-template-rows:auto 78px minmax(0,1fr) auto; gap:15px; }
 .masthead { display:flex; align-items:center; gap:23px; min-height:64px; padding:1px 0 10px; }
 h1 { flex:none; }
-#wordmark { font-family:"DejaVu Sans Mono",monospace; font-weight:900; text-shadow:.02em 0 currentColor; font-size:clamp(7.5px,.79vw,11.5px); line-height:.96; letter-spacing:-.045em; color:var(--ink); user-select:none; }
+#wordmark { font-family:var(--ascii-mono); font-weight:900; text-shadow:.02em 0 currentColor; font-size:clamp(7.5px,.79vw,11.5px); line-height:.96; letter-spacing:-.045em; color:var(--ink); user-select:none; }
 .brand-description { align-self:center; color:var(--muted); font-size:.7rem; letter-spacing:.125em; white-space:nowrap; }
 .brand-description b, .section-head i, .feed-head i { color:var(--accent); font-style:normal; }
 .controls { display:flex; align-items:center; justify-content:flex-end; gap:clamp(10px,1.6vw,26px); margin-left:auto; white-space:nowrap; }
@@ -32,6 +37,7 @@ h1 { flex:none; }
 .button-bracket:first-child { margin-right:.35em; }
 .button-bracket:last-child { margin-left:.35em; }
 .controls strong { color:var(--accent); font-weight:500; }
+#art-name { display:inline-block; width:6ch; }
 .theme-label, .arrow, #sound-state { color:var(--muted); }
 .theme-control { position:relative; }
 .popup { position:absolute; z-index:10; right:0; top:100%; min-width:183px; padding:13px; background:var(--bg); }
@@ -88,7 +94,7 @@ h2 { font-size:.86rem; font-weight:700; letter-spacing:.095em; text-transform:up
 .scope-mark { color:var(--muted); }
 .entity-card { display:flex; flex:1; min-height:0; justify-content:space-evenly; align-items:center; gap:9px; margin:0 17px; }
 .portrait-area { position:relative; min-width:0; flex:1; max-width:55%; display:grid; place-items:center; align-self:stretch; }
-#portrait { max-width:100%; font-family:"DejaVu Sans Mono",monospace; font-weight:600; color:var(--ink); font-size:clamp(4.4px,.49vw,8.1px); line-height:1.12; white-space:pre; }
+#portrait { max-width:100%; font-family:var(--ascii-mono); font-weight:600; color:var(--ink); font-size:clamp(4.4px,.49vw,8.1px); line-height:1.12; white-space:pre; }
 .entity-details { flex:1; min-width:0; }
 .eyebrow { color:var(--accent); font-size:.64rem; letter-spacing:.092em; }
 .entity-details h3 { margin:5px 0; font-size:clamp(17px,1.37vw,23px); letter-spacing:-.06em; line-height:1.15; }

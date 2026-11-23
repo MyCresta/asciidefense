@@ -1,4 +1,4 @@
-import { setGrade } from './weapons.js?v=3.9.0';
+import { setGrade } from './weapons.js?v=3.10.0';
 // Elite traits, cursed cards and routes: the run's random pressure and tradeoffs.
 
 // Elites roll one trait. The names mirror weapon traits so each reads as a counter.

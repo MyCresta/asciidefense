@@ -49,3 +49,39 @@ test('every enemy has a vector drawing in its ASCII box', async () => {
   const spire = vectorSpire(width(TOWER), TOWER.length);
   assert.equal(spire.h, TOWER.length * 10);
 });
+
+test('every relic, upgrade, weapon and service has a vector icon', async () => {
+  const { POWERS, UPGRADES } = await import('../content.js');
+  const { WEAPONS } = await import('../weapons.js');
+  const { MOTIFS, ICON_KEYS, iconSVG } = await import('../vector-icons.js');
+  const groups = [[POWERS, ICON_KEYS.relic], [UPGRADES, ICON_KEYS.upgrade], [WEAPONS, ICON_KEYS.weapon]];
+  for (const [items, motifs] of groups) {
+    for (const key of Object.keys(items)) {
+      assert.ok(MOTIFS[motifs[key]], key + ' has a vector icon');
+    }
+  }
+  for (const motif of Object.values(ICON_KEYS.service)) assert.ok(MOTIFS[motif], motif + ' exists');
+  for (const [name, shapes] of Object.entries(MOTIFS)) {
+    for (const shape of shapes) assert.ok(!/NaN|undefined/.test(shape.d), name + ' paths are valid');
+  }
+  // Family badges are what tell relics apart at a glance.
+  for (const family of new Set(Object.values(POWERS).map(power => power.family))) {
+    assert.notEqual(iconSVG('star', family), iconSVG('star'), family + ' has a badge');
+  }
+});
+
+test('art styles only repaint the interface, never re-lay it out', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const css = await readFile(new URL('../art-styles.css', import.meta.url), 'utf8');
+  // Swapping styles must keep every element's size and position, so per-style
+  // rules may only change paint. Absolutely placed rule pseudo-elements are exempt.
+  const layout = /^(padding|margin|width|height|min-|max-|font-size|font-weight|letter-spacing|line-height|gap|display|flex|grid|position|inset|top|left|right|bottom|border(?!-radius)|content|white-space)/;
+  const rules = css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g);
+  for (const [, selector, body] of rules) {
+    if (!/data-art=/.test(selector) || /::(before|after)/.test(selector) || /frame-art/.test(selector)) continue;
+    for (const declaration of body.split(';')) {
+      const property = declaration.split(':')[0].trim();
+      if (property) assert.doesNotMatch(property, layout, `${selector.trim()} sets ${property}`);
+    }
+  }
+});

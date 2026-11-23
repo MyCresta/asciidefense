@@ -1,14 +1,14 @@
-import { $, element, pad, setText, setTier } from './ui.js?v=3.9.0';
-import { forgeWeapon, foundry, openCache, workshopCosts } from './workshop.js?v=3.9.0';
-import { WEAPONS, MOUNT_OUTPUT, HARDPOINT_BOSSES, GRADE_NAMES, MAX_GRADE, MOD_GRADES, mountStats, mountTitle, describeMount } from './weapons.js?v=3.9.0';
+import { $, element, pad, setText, setTier } from './ui.js?v=3.10.0';
+import { forgeWeapon, foundry, openCache, workshopCosts } from './workshop.js?v=3.10.0';
+import { WEAPONS, MOUNT_OUTPUT, HARDPOINT_BOSSES, GRADE_NAMES, MAX_GRADE, MOD_GRADES, mountStats, mountTitle, describeMount } from './weapons.js?v=3.10.0';
 
-const SERVICES = {
+export const SERVICES = {
   caches: { name: 'Big cache', icon: '  ____ \n /___/|\n |___|/' },
   tune: { name: 'Core tuning', icon: '.--+--.\n| (o) |\n\u0027--+--\u0027' },
   repair: { name: 'Hull patch', icon: '   +   \n--[+]--\n   +   ' },
   relic: { name: 'Relic draft', icon: ' .---. \n | ? | \n \u0027---\u0027 ' }
 };
-const EMPTY_ICON = '  .-.  \n--(+)--\n  \u0027-\u0027  ';
+export const EMPTY_ICON = '  .-.  \n--(+)--\n  \u0027-\u0027  ';
 const METER = 8;
 
 // Fitted hardpoints forge their weapon up a grade. The next sealed hardpoint shows which sovereign opens it.

@@ -1,12 +1,12 @@
-import { WEAPONS, WEAPON_COMBOS, GRADE_NAMES, mountTitle, describeMount } from './weapons.js?v=3.9.0';
-import { PERKS, buyPerk, perkBank, readPerks } from './perks.js?v=3.9.0';
-import { workshopCosts, describeBlueprint, rerollCache, closeCache, fitChoices, cancelFit } from './workshop.js?v=3.9.0';
-import { BLUEPRINTS, ENEMIES, RUN_PROFILES, POWERS, SYNERGIES, UPGRADES } from './content.js?v=3.9.0';
-import { ENEMY_PORTRAITS } from './art.js?v=3.9.0';
-import { paintPortrait } from './pixel-art.js?v=3.9.0';
-import { vectorElement } from './vector-art.js?v=3.9.0';
-import { formatTime } from './engine.js?v=3.9.0';
-import { $, decorateFrame, drawStats, element, pad, setText, setTier, tierName } from './ui.js?v=3.9.0';
+import { WEAPONS, WEAPON_COMBOS, GRADE_NAMES, mountTitle, describeMount } from './weapons.js?v=3.10.0';
+import { PERKS, buyPerk, perkBank, readPerks } from './perks.js?v=3.10.0';
+import { workshopCosts, describeBlueprint, rerollCache, closeCache, fitChoices, cancelFit } from './workshop.js?v=3.10.0';
+import { BLUEPRINTS, ENEMIES, RUN_PROFILES, POWERS, SYNERGIES, UPGRADES } from './content.js?v=3.10.0';
+import { ENEMY_PORTRAITS } from './art.js?v=3.10.0';
+import { paintPortrait } from './pixel-art.js?v=3.10.0';
+import { vectorElement } from './vector-art.js?v=3.10.0';
+import { formatTime } from './engine.js?v=3.10.0';
+import { $, decorateFrame, drawStats, element, pad, setText, setTier, tierName } from './ui.js?v=3.10.0';
 
 function entry(name, description, marker = '') {
   const row = element('li');

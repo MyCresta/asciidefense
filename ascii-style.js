@@ -1,8 +1,8 @@
-import { TOWER, TOWER_SMALL, ENEMY_ART } from './art.js?v=3.9.0';
-import { ELITE_TRAITS } from './hazards.js?v=3.9.0';
-import { maxWeaponRange } from './weapons.js?v=3.9.0';
+import { TOWER, TOWER_SMALL, ENEMY_ART } from './art.js?v=3.10.0';
+import { ELITE_TRAITS } from './hazards.js?v=3.10.0';
+import { maxWeaponRange } from './weapons.js?v=3.10.0';
 
-export const FONT = '"Lucida Console", "Liberation Mono", "Courier New", monospace';
+export const FONT = '"Spire ASCII", "Lucida Console", "Liberation Mono", "Courier New", monospace';
 const TAU = Math.PI * 2;
 const TOWER_ANCHOR = .5;
 const MOUNT_MARKS = { bolt: '+', scatter: ':', lance: '=', coil: '~', mortar: 'o', cryo: '*' };
@@ -114,11 +114,24 @@ export class AsciiStyle {
     return makeSprite(rows, lineHeight, this.ratio, this.colors, tower);
   }
 
+  // Canvas text needs the style's web font loaded; sprites drawn before then are redrawn.
+  static fontFamily = 'Spire ASCII';
+  loadFont() {
+    const family = this.constructor.fontFamily;
+    if (this.fontRequested || typeof document === 'undefined' || !document.fonts) return;
+    this.fontRequested = true;
+    if ([400, 700].every(weight => document.fonts.check(`${weight} 16px "${family}"`))) return;
+    Promise.all([400, 700].map(weight => document.fonts.load(`${weight} 16px "${family}"`)))
+      .then(() => { this.stale = true; }, () => {});
+  }
+
   prepare() {
+    this.loadFont();
     const { w, h } = this;
     const rows = w < 530 || h < 235 ? TOWER_SMALL : TOWER;
     const cols = Math.max(...rows.map(line => line.length));
-    const size = Math.min(176, w * .195, h * .39);
+    // Kept compact so hostiles closing in from above and the sides stay in view.
+    const size = Math.min(148, w * .165, h * .33);
     const towerLine = Math.min(size / (cols * .624), size / rows.length);
     this.tower = this.sprite(rows, towerLine, true);
     this.enemySprites = new Map();
@@ -136,14 +149,20 @@ export class AsciiStyle {
     if (this.field.showRange) this.paintImage(this.rangeLayer());
     const entries = game.enemies.map(enemy => ({ enemy, p: this.project(enemy.x, enemy.y) })).sort((a, b) => a.p.y - b.p.y);
     let towerDrawn = false;
+    const behind = [];
     for (const { enemy, p } of entries) {
       if (!towerDrawn && p.y >= this.geometry.oy + this.tower.height * .20) {
         this.paintTower();
+        this.paintBehind(behind, now);
         towerDrawn = true;
       }
       this.paintEnemy(enemy, p, now);
+      if (!towerDrawn) behind.push({ enemy, p });
     }
-    if (!towerDrawn) this.paintTower();
+    if (!towerDrawn) {
+      this.paintTower();
+      this.paintBehind(behind, now);
+    }
     this.paintShots();
     this.paintEffects();
     this.paintWarning();
@@ -273,15 +292,33 @@ export class AsciiStyle {
     return sprite;
   }
 
+  enemyPlace(enemy, p, now, sprite) {
+    const seed = Number.parseInt(String(enemy.id).replace(/\D/g, ''), 10) || 0;
+    const floating = ['moth', 'wraith', 'cantor'].includes(enemy.type);
+    const bob = Math.sin(now * (floating ? 3.6 : 5) + seed * 2.1) * (floating ? 1.35 : .45);
+    return { seed, bob, x: Math.round(p.x - sprite.width / 2), y: Math.round(p.y - sprite.height / 2 + bob) };
+  }
+
+  // Hostiles behind the Spire show through it as a faint silhouette, so none vanish.
+  paintBehind(entries, now) {
+    const { ctx, tower, geometry: g } = this;
+    const left = g.ox - tower.width / 2, top = g.oy - tower.height * TOWER_ANCHOR;
+    for (const { enemy, p } of entries) {
+      const sprite = this.enemySprite(enemy);
+      if (!sprite) continue;
+      const { x, y } = this.enemyPlace(enemy, p, now, sprite);
+      if (x > left + tower.width || x + sprite.width < left || y > top + tower.height || y + sprite.height < top) continue;
+      ctx.globalAlpha = .5;
+      this.paintImage(sprite, x, y);
+      ctx.globalAlpha = 1;
+    }
+  }
+
   paintEnemy(enemy, p, now) {
     const sprite = this.enemySprite(enemy);
     if (!sprite) return;
     const { ctx, colors } = this;
-    const seed = Number.parseInt(String(enemy.id).replace(/\D/g, ''), 10) || 0;
-    const floating = ['moth', 'wraith', 'cantor'].includes(enemy.type);
-    const bob = Math.sin(now * (floating ? 3.6 : 5) + seed * 2.1) * (floating ? 1.35 : .45);
-    const x = Math.round(p.x - sprite.width / 2);
-    const y = Math.round(p.y - sprite.height / 2 + bob);
+    const { seed, bob, x, y } = this.enemyPlace(enemy, p, now, sprite);
     const half = sprite.width * .5;
     const focused = this.game.focusId === enemy.id;
     const active = focused || this.game.selected === enemy.id || this.hover === enemy.id || this.keyTarget === enemy.id;
