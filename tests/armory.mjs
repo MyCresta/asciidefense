@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { saveCheckpoint } from '../checkpoint.js';
-import { WEAPONS, TRAITS, MAX_GRADE, mountStats, earnHardpoint } from '../weapons.js';
+import { WEAPONS, TRAITS, MODS, MAX_GRADE, mountStats, earnHardpoint } from '../weapons.js';
 import { openCache, pickBlueprint, closeCache, foundry, forgeWeapon, workshopCosts, fitChoices } from '../workshop.js';
 import { CHECKPOINT_KEY, MemoryStorage, start } from './support/gameplay.mjs';
 
@@ -53,7 +53,7 @@ test('hardpoints cannot be bought and open at the first and third sovereign', ()
   assert.equal(pickBlueprint(game, fresh.key), true);
   assert.equal(game.status, 'running');
   assert.equal(game.armory.mounts.length, 2);
-  assert.deepEqual(game.armory.mounts[1], mount(fresh.weapon, { grade: fresh.grade, trait: fresh.trait }));
+  assert.deepEqual(game.armory.mounts[1], mount(fresh.weapon, { grade: fresh.grade, trait: fresh.trait, rolls: fresh.rolls, mods: fresh.mods }));
   game.bossKills = 2;
   assert.equal(earnHardpoint(game), false);
   game.bossKills = 3;
@@ -77,22 +77,48 @@ test('the forge spends rising scrap to raise a weapon up to the top grade', () =
   assert.ok(mountStats(mount('bolt', { grade: 5 })).scale > mountStats(mount('bolt', { grade: 3 })).scale);
 });
 
-test('a duplicate find reinforces the held weapon and a masterwork duplicate is reclaimed', () => {
+test('a duplicate find reinforces the held weapon, a maxed one is tempered, then reclaimed', () => {
   const game = start(55);
   const key = game.armory.mounts[0].key;
+  const rolls = { ...game.armory.mounts[0].rolls };
   game.workshop.caches = 1;
   game.workshop.offer = [{ key: 'arm:' + key, weapon: key, grade: 1, trait: 'rapid' }, { key: 'scrap', grade: 1, levels: 1 }, { key: 'prospect', grade: 1, levels: 1 }];
   assert.equal(openCache(game), true);
   assert.equal(pickBlueprint(game, 'arm:' + key), true);
-  assert.deepEqual(game.armory.mounts[0], mount(key, { grade: 2, trait: 'rapid' }));
+  assert.deepEqual(game.armory.mounts[0], mount(key, { grade: 2, trait: 'rapid', rolls, mods: [] }));
   game.armory.mounts[0].grade = MAX_GRADE;
-  game.workshop.caches = 1;
-  game.workshop.offer = [{ key: 'arm:' + key, weapon: key, grade: 2, trait: 'long' }, { key: 'scrap', grade: 1, levels: 1 }, { key: 'prospect', grade: 1, levels: 1 }];
+  game.armory.mounts[0].rolls = { power: 20, cadence: 20, reach: 10 };
+  const dupe = () => {
+    game.workshop.caches = 1;
+    game.workshop.offer = [{ key: 'arm:' + key, weapon: key, grade: 2, trait: 'long' }, { key: 'scrap', grade: 1, levels: 1 }, { key: 'prospect', grade: 1, levels: 1 }];
+    assert.equal(openCache(game), true);
+    assert.equal(pickBlueprint(game, 'arm:' + key), true);
+  };
   const scrap = game.scrap;
-  assert.equal(openCache(game), true);
-  assert.equal(pickBlueprint(game, 'arm:' + key), true);
+  dupe();
+  assert.deepEqual(game.armory.mounts[0].rolls, { power: 20, cadence: 20, reach: 15 });
+  dupe();
+  assert.equal(game.armory.mounts[0].rolls.reach, 20);
+  assert.equal(game.scrap, scrap);
+  dupe();
   assert.ok(game.scrap > scrap);
   assert.equal(game.armory.mounts[0].trait, 'rapid');
+});
+
+test('weapons roll their own stats and gain a random mod at grades 3, 6 and 9', () => {
+  const game = start(77);
+  game.scrap = 1e7;
+  const [primary] = game.armory.mounts;
+  for (const value of Object.values(primary.rolls)) assert.ok(value >= -8 && value <= 12);
+  const base = mountStats(mount(primary.key));
+  const rolled = mountStats({ ...primary, mods: [] });
+  assert.ok(Math.abs(rolled.scale / base.scale - (1 + primary.rolls.power / 100)) < 1e-9);
+  while (forgeWeapon(game, 0)) { /* forge to the top */ }
+  assert.equal(primary.grade, MAX_GRADE);
+  assert.equal(primary.mods.length, 3);
+  assert.equal(new Set(primary.mods).size, 3);
+  for (const key of primary.mods) assert.ok(Object.hasOwn(MODS, key));
+  assert.equal(saveCheckpoint(game), true);
 });
 
 test('a find with full hardpoints asks which weapon to replace and keeps its reload', () => {
@@ -118,6 +144,7 @@ test('a find with full hardpoints asks which weapon to replace and keeps its rel
   assert.equal(game.status, 'running');
   assert.equal(game.workshop.caches, 0);
   assert.deepEqual(game.armory.mounts, [mount(other, { grade: 2, trait: 'heavy', cooldown: 0.7 })]);
+
 });
 
 test('grades and traits change the stats a mount fires with', () => {

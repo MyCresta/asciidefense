@@ -1,11 +1,11 @@
-import { ENEMIES, UPGRADES, POWERS, DOCTRINES, BLUEPRINTS, SYNERGIES, RUN_PROFILES } from './content.js?v=3.8.0';
-import { restoreCheckpoint, clearCheckpoint } from './checkpoint.js?v=3.8.0';
+import { ENEMIES, UPGRADES, POWERS, DOCTRINES, BLUEPRINTS, SYNERGIES, RUN_PROFILES } from './content.js?v=3.9.0';
+import { restoreCheckpoint, clearCheckpoint } from './checkpoint.js?v=3.9.0';
 
-import { createWorkshop, awardSalvage, pickBlueprint } from './workshop.js?v=3.8.0';
-import { earnHardpoint, initWeapons, WEAPONS, fireMounts, spreadFire } from './weapons.js?v=3.8.0';
-import * as Relics from './relic-effects.js?v=3.8.0';
-import { applyEliteTrait, rollEliteTrait, cursed, offerRoute, routeActive, routeWeight, tickRoutes } from './hazards.js?v=3.8.0';
-import { applyPerks } from './perks.js?v=3.8.0';
+import { createWorkshop, awardSalvage, pickBlueprint } from './workshop.js?v=3.9.0';
+import { earnHardpoint, initWeapons, WEAPONS, fireMounts, spreadFire } from './weapons.js?v=3.9.0';
+import * as Relics from './relic-effects.js?v=3.9.0';
+import { applyEliteTrait, rollEliteTrait, cursed, offerRoute, routeActive, routeWeight, tickRoutes } from './hazards.js?v=3.9.0';
+import { applyPerks } from './perks.js?v=3.9.0';
 
 export { ENEMIES, UPGRADES, POWERS, DOCTRINES, BLUEPRINTS, SYNERGIES, RUN_PROFILES };
 export const WORLD = Object.freeze({ x: 140, y: 84 });
@@ -16,7 +16,15 @@ const HIT_RADIUS = 4;
 const DRAFT_PERIOD = 120;
 const BOSS_PERIOD = 180;
 const BOSS_NOTICE = 12;
-const BASE_LEVELS = { range: 1, rate: 1, damage: 1, splash: 0, crit: 0, chain: 0, armor: 0, regen: 0, bounty: 0 };
+const RATE_STEP = 1.17;
+const DAMAGE_STEP = 2;
+const TUNE_FULL = 12;
+// Late hostiles harden more slowly than before, to match the gentler power curve.
+const ENDURANCE_PACE = 100;
+const BASE_LEVELS = { range: 1, rate: 1, damage: 1, splash: 0, crit: 0, chain: 0, armor: 0, regen: 0, bounty: 0,
+  lethality: 0, incendiary: 0, chill: 0, hunter: 0, barrier: 0, salvage: 0 };
+// Share of the relic pool a run can draw from, so no two runs offer the same relics.
+const DECK_SHARE = .55;
 const CONTACTS = [
   ['crawler', -79, -39], ['wraith', 54, -49], ['moth', 109, -9], ['crawler', 68, 47],
   ['brute', -77, 44], ['moth', -98, 6], ['crawler', -19, 37]
@@ -188,6 +196,9 @@ export class Game {
     this.stats = { dealt: 0, bestHit: 0, taken: {}, fatal: null, trace: [] };
     this.curses = [];
     this.route = this.path = null;
+    this.barrier = 0;
+    this.relicState = { streak: 0, streakUntil: 0, plateUntil: 0, hitAt: -1000, echo: 0 };
+    this.deck = this.dealDeck();
     initWeapons(this, primaryWeapon);
     applyPerks(this);
     const mirrorX = this.random() < .5 ? -1 : 1;
@@ -203,21 +214,50 @@ export class Game {
   }
 
   get encounter() { return RUN_PROFILES[this.profile]; }
-  get range() { return Relics.stat(this, 'range', 37 + 4.5 * (this.levels.range - 1) + this.bonus.range + 12 * (this.powers.scope || 0)); }
+
+  // Levels past an upgrade's original cap count for half.
+  level(key) {
+    const level = this.levels[key] || 0, soft = UPGRADES[key]?.soft ?? Infinity;
+    return level <= soft ? level : soft + (level - soft) / 2;
+  }
+
+  get range() { return Relics.stat(this, 'range', 37 + 4.5 * (this.level('range') - 1) + this.bonus.range + 12 * (this.powers.scope || 0)); }
   get rate() {
-    const base = (.85 * 1.19 ** (this.levels.rate - 1) + this.bonus.rate) * (1 + .25 * (this.powers.overclock || 0));
-    return Relics.stat(this, 'rate', base * (1 + .02 * this.workshop.tunes)) * (cursed(this, 'hunger') ? 1.25 : 1);
+    const base = .85 * RATE_STEP ** (this.level('rate') - 1) + this.bonus.rate;
+    const curses = (cursed(this, 'hunger') ? 1.25 : 1) * (cursed(this, 'frenzy') ? 1.3 : 1);
+    return Relics.stat(this, 'rate', base * (1 + .01 * this.tuneRanks)) * curses;
   }
   get damage() {
-    const base = 8 + 2 * (this.levels.damage - 1) + this.bonus.damage + (this.powers.reactor || 0);
-    return Relics.stat(this, 'damage', base + 2 * this.workshop.tunes) * (cursed(this, 'glass') ? 1.4 : 1);
+    const base = 8 + DAMAGE_STEP * (this.level('damage') - 1) + this.bonus.damage + (this.powers.reactor || 0);
+    return Relics.stat(this, 'damage', base + this.tuneRanks) * (cursed(this, 'glass') ? 1.4 : 1);
   }
-  get splash() { return Relics.stat(this, 'splash', (this.levels.splash ? 5 + 1.7 * this.levels.splash : 0) + 10 * (this.powers.fracture || 0)); }
-  get critChance() { return Relics.stat(this, 'critChance', this.levels.crit * .075); }
-  get chain() { return Relics.stat(this, 'chain', this.levels.chain + (this.powers.tesla || 0) + Number(this.synergyActive('rimewire'))); }
-  get armor() { return Relics.stat(this, 'armor', this.levels.armor * 1.5); }
-  get regen() { return Relics.stat(this, 'regen', this.levels.regen * .20); }
-  get bounty() { return Relics.stat(this, 'bounty', this.levels.bounty * .18); }
+  // Core tuning gives double value for its first ranks, then a steady single step.
+  get tuneRanks() {
+    const tunes = this.workshop.tunes;
+    return tunes + Math.min(tunes, TUNE_FULL);
+  }
+  get splash() { return Relics.stat(this, 'splash', (this.levels.splash ? 5 + 1.7 * this.level('splash') : 0) + 8 * (this.powers.fracture || 0)); }
+  get critChance() { return Relics.stat(this, 'critChance', this.level('crit') * .075); }
+  get chain() { return Relics.stat(this, 'chain', Math.floor(this.level('chain')) + (this.powers.tesla || 0) + Number(this.synergyActive('rimewire'))); }
+  get armor() { return cursed(this, 'rust') ? Relics.stat(this, 'armor', 0) : Relics.stat(this, 'armor', this.level('armor') * 1.5); }
+  get regen() { return Relics.stat(this, 'regen', this.level('regen') * .20); }
+  get bounty() { return Relics.stat(this, 'bounty', this.level('bounty') * .18); }
+
+  // Deal this run's relic deck: every reserve relic plus a random share of the rest.
+  dealDeck() {
+    const deck = [];
+    for (const tier of ['common', 'uncommon', 'rare']) {
+      const pool = Object.keys(POWERS).filter(key => !POWERS[key].reserve && POWERS[key].rarity === tier);
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(this.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+      }
+      deck.push(...pool.slice(0, Math.max(3, Math.round(pool.length * DECK_SHARE))));
+    }
+    return [...deck, ...Object.keys(POWERS).filter(key => POWERS[key].reserve)];
+  }
+
+  inDeck(key) { return !this.deck || this.deck.includes(key) || Boolean(this.powers[key]); }
 
   synergyActive(key) {
     if (!Object.hasOwn(SYNERGIES, key)) return false;
@@ -270,7 +310,8 @@ export class Game {
   }
 
   openDraft(reason) {
-    const eligible = Object.keys(POWERS).filter(key => !POWERS[key].maxStacks || (this.powers[key] || 0) < POWERS[key].maxStacks);
+    const eligible = Object.keys(POWERS).filter(key => this.inDeck(key)
+      && (!POWERS[key].maxStacks || (this.powers[key] || 0) < POWERS[key].maxStacks));
     const rare = eligible.filter(key => POWERS[key].rare);
     const regular = eligible.filter(key => !POWERS[key].rare && !POWERS[key].reserve);
     const uncommon = regular.filter(key => POWERS[key].rarity === 'uncommon');
@@ -278,7 +319,7 @@ export class Game {
     const reserve = eligible.filter(key => POWERS[key].reserve);
     const opening = this.draftHistory.length === 0 && reason !== 'boss';
     const recent = opening ? this.records.openers : this.draftHistory;
-    const featured = reason === 'time' || this.random() < .35;
+    const featured = reason === 'time' || reason === 'bought' || this.random() < .35;
     const choices = [];
     for (let slot = 0; slot < 3; slot++) {
       const firstPool = reason === 'boss' ? rare : slot === 0 && featured ? uncommon : common;
@@ -312,7 +353,7 @@ export class Game {
     this.powers[key] = (this.powers[key] || 0) + 1;
     if (key === 'reservoir') { this.maxHp += 12; this.hp += 12; }
     if (key === 'interest') this.scrap += 25 + this.threat * 5;
-    if (key === 'repulse') this.pulseAt = this.time + 10;
+    if (key === 'repulse') this.pulseAt = this.time + (this.powers.repulse > 1 ? 7 : 10);
     if (key === 'ward') this.wardAt = this.time;
     Relics.onPick(this, key);
     this.note(`Relic installed: ${POWERS[key].name}.`, 'upgrade');
@@ -327,7 +368,7 @@ export class Game {
 
   // Wild card: install a random ordinary relic that still has room to stack.
   wildRelic() {
-    const pool = Object.keys(POWERS).filter(key => !POWERS[key].rare && !POWERS[key].reserve
+    const pool = Object.keys(POWERS).filter(key => !POWERS[key].rare && !POWERS[key].reserve && this.inDeck(key)
       && (!POWERS[key].maxStacks || (this.powers[key] || 0) < POWERS[key].maxStacks));
     if (!pool.length) return;
     const key = pool[Math.min(pool.length - 1, Math.floor(this.random() * pool.length))];
@@ -342,10 +383,12 @@ export class Game {
     const profile = ENEMIES[type];
     // Smooth growth keeps later minutes responsive to loadout strength and salvage luck.
     const reinforcement = this.time / (this.time + 600);
-    const endurance = 1 + this.time / 420 + (this.time / 420) ** 2 + (this.time / 75) ** 3 * reinforcement ** 4;
+    const endurance = 1 + this.time / 420 + (this.time / 420) ** 2 + (this.time / ENDURANCE_PACE) ** 3 * reinforcement ** 4;
     const scale = this.encounter.hp * endurance;
-    const maxHp = Math.max(1, Math.round(profile.hp * scale * (mini ? .47 : elite ? 2.25 : 1) * (cursed(this, 'greed') ? 1.15 : 1)));
-    const speed = profile.speed * this.encounter.speed * 1.36 * (1 + Math.min(.75, this.time / 750)) * (mini ? 1.22 : elite ? 1.08 : 1);
+    const debt = type === 'sovereign' && cursed(this, 'debt') ? 1.3 : 1;
+    const maxHp = Math.max(1, Math.round(profile.hp * scale * (mini ? .47 : elite ? 2.25 : 1) * (cursed(this, 'greed') ? 1.15 : 1) * debt));
+    const speed = profile.speed * this.encounter.speed * 1.36 * (1 + Math.min(.75, this.time / 750)) * (mini ? 1.22 : elite ? 1.08 : 1)
+      * (cursed(this, 'frenzy') ? 1.1 : 1);
     const maxShield = type === 'aegis' ? Math.round(maxHp * .48) : 0;
     const enemy = {
       id: `e${this.nextId++}`, type, x, y, hp: maxHp, maxHp, speed,
@@ -452,7 +495,7 @@ export class Game {
   advance(enemy, dt) {
     if (enemy.burnUntil > this.time - dt) {
       const burningTime = Math.min(dt, enemy.burnUntil - (this.time - dt));
-      this.hurt(enemy, enemy.burnDps * burningTime);
+      this.hurt(enemy, enemy.burnDps * burningTime * Relics.burnFactor(this));
     }
     if (enemy.hp <= 0) return;
     if (enemy.trait === 'mending' && enemy.hp < enemy.maxHp) enemy.hp = Math.min(enemy.maxHp, enemy.hp + enemy.maxHp * .03 * dt);
@@ -492,7 +535,7 @@ export class Game {
   }
 
   repulse() {
-    this.pulseAt = this.time + 10;
+    this.pulseAt = this.time + (this.powers.repulse > 1 ? 7 : 10);
     this.effect(0, 0, 'pulse', this.range, .8);
     for (const enemy of this.enemies) {
       const gap = distance(enemy, CORE);
@@ -529,13 +572,14 @@ export class Game {
 
   strike(enemy, amount, direct = false, ignite = direct) {
     if (enemy.type === 'brute') amount *= .85;
-    if (this.powers.headhunter && enemy.tier >= 3) amount *= 1.6;
     amount *= Relics.hitFactor(this, enemy, direct);
     this.hurt(enemy, amount);
-    if (this.powers.frost) enemy.slowUntil = this.time + 3;
-    if (ignite && this.powers.ember && enemy.hp > 0) {
+    if (this.powers.frost) enemy.slowUntil = Math.max(enemy.slowUntil, this.time + (this.powers.frost > 1 ? 5 : 3));
+    if (direct && this.levels.chill && enemy.hp > 0 && this.random() < .07 * this.levels.chill) enemy.slowUntil = Math.max(enemy.slowUntil, this.time + 2.5);
+    const burn = (this.powers.ember ? (this.powers.ember > 1 ? 1 : .6) : 0) + .08 * (this.levels.incendiary || 0);
+    if (ignite && burn && enemy.hp > 0) {
       const remaining = Math.max(0, enemy.burnUntil - this.time) * enemy.burnDps;
-      enemy.burnDps = (remaining + amount * .60) / 3;
+      enemy.burnDps = (remaining + amount * burn) / 3;
       enemy.burnUntil = this.time + 3;
       this.effect(enemy.x, enemy.y, 'burn', 3);
     }
@@ -550,7 +594,7 @@ export class Game {
   fire(target, shot = {}) {
     this.gunClock = 1 / this.rate;
     const role = shot.role || {};
-    const critChance = this.critChance + (role.crit || 0);
+    const critChance = this.critChance + (role.crit || 0) + Relics.critBonus(this, target);
     const crit = critChance > 0 && this.random() < critChance;
     let amount = this.damage * (shot.scale ?? 1) * (crit ? Relics.criticalMultiplier(this) * (role.critPower || 1) : 1);
     if (this.powers.coinflip) amount *= this.random() < .5 ? .5 : 1.7;
@@ -573,14 +617,20 @@ export class Game {
     if (splash > 0) {
       this.effect(target.x, target.y, 'splash', splash);
       const wildfire = this.synergyActive('wildfire');
+      const blast = .65 * (1 + .3 * (this.powers.shrapnel || 0));
       for (const enemy of this.enemies) {
-        if (enemy !== target && enemy.hp > 0 && distance(enemy, target) <= splash) this.strike(enemy, amount * .65, false, wildfire);
+        if (enemy === target || enemy.hp <= 0 || distance(enemy, target) > splash) continue;
+        this.strike(enemy, amount * blast, false, wildfire);
+        if (this.powers.flashbang) enemy.slowUntil = Math.max(enemy.slowUntil, this.time + 1.5);
       }
     }
     const struck = new Set([target.id]);
-    if (this.powers.twinshot) {
+    for (let bolt = 0; bolt < Math.min(2, this.powers.twinshot || 0); bolt++) {
       const other = this.nearest(CORE, shot.reach ?? this.range, struck);
-      if (other) { this.beam(other, 'twin'); this.strike(other, amount * .65, true); }
+      if (!other) break;
+      struck.add(other.id);
+      this.beam(other, 'twin');
+      this.strike(other, amount * .65, true);
     }
     let from = target;
     const hops = role.chain === 0 ? 0 : this.chain * (role.chain ?? 1) + (shot.extraChains || 0);
@@ -588,7 +638,7 @@ export class Game {
       const next = this.nearest(from, 23, struck);
       if (!next) break;
       this.beam(next, 'chain', from);
-      this.strike(next, amount * .70 * .88 ** hop);
+      this.strike(next, amount * .70 * .88 ** hop * (this.powers.conductor ? 1.3 : 1));
       struck.add(next.id);
       from = next;
     }
@@ -604,7 +654,7 @@ export class Game {
 
   rewardKill(enemy) {
     const base = Math.round(enemy.reward * this.encounter.salvage * (1 + this.bounty)) + (this.powers.harvest || 0);
-    const jackpot = this.powers.jackpot && this.random() < .1;
+    const jackpot = this.powers.jackpot && this.random() < (this.powers.jackpot > 1 ? 1 / 6 : .1);
     const payout = (cursed(this, 'greed') ? 1.5 : 1) * (routeActive(this, 'convoy') ? 1.25 : 1) * (jackpot ? 3 : 1)
       * (this.powers.warrant && (enemy.elite || enemy.boss) ? 2 : 1);
     const bounty = Math.round(Relics.bounty(this, enemy, base) * payout);
@@ -669,13 +719,20 @@ export class Game {
 
   impact(enemy, siegeDamage = 0) {
     if (this.powers.ward && this.time >= this.wardAt) {
-      this.wardAt = this.time + 24;
+      this.wardAt = this.time + (this.powers.ward > 1 ? 14 : 24);
       this.effect(0, 0, 'ward', 8, .65);
       this.note('Phase ward absorbed an impact.', 'system');
       return;
     }
     const damage = Math.max(1, Math.round((siegeDamage || enemy.damage) - this.armor));
-    const applied = Relics.impact(this, enemy, damage);
+    let applied = Relics.impact(this, enemy, damage);
+    if (this.relicState) this.relicState.hitAt = this.time;
+    if (applied > 0 && this.barrier > 0) {
+      const absorbed = Math.min(this.barrier, applied);
+      this.barrier -= absorbed;
+      applied -= absorbed;
+      this.effect(0, 0, 'ward', 6, .4);
+    }
     this.hp = Math.min(this.maxHp, Math.max(0, this.hp - applied));
     if (this.stats && applied > 0) {
       const source = siegeDamage ? 'siege' : enemy.type;

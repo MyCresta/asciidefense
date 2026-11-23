@@ -69,13 +69,13 @@ test('ordinary kills drop small caches that install an upgrade at once without p
   assert.equal(Object.values(game.levels).reduce((a, b) => a + b, 0) > levels, true);
   assert.equal(game.status, 'running');
   let small = 0, big = 0;
-  for (let i = 0; i < 400; i++) {
+  for (let i = 0; i < 1200; i++) {
     const caches = game.workshop.caches, found = game.workshop.found;
     game.time += 40;
     awardSalvage(game, { x: 0, y: 0, boss: false, elite: false });
     if (game.workshop.found > found) game.workshop.caches > caches ? big++ : small++;
   }
-  assert.ok(small > big * 3 && big > 0);
+  assert.ok(small > big * 3 && big > 0, small + " small, " + big + " big");
   const elite = quiet(411);
   elite.powers.magpie = 1;
   const before = elite.workshop.caches;
@@ -115,7 +115,7 @@ test('new relics: reaper, overkill, ricochet, midas, hoard and wild card', () =>
   const plain = hoard.damage;
   hoard.powers.hoard = 1;
   hoard.scrap = 1000;
-  assert.ok(Math.abs(hoard.damage / plain - 1.4) < 1e-9);
+  assert.ok(Math.abs(hoard.damage / plain - 1.3) < 1e-9);
 
   const wild = quiet(424);
   wild.openDraft('time');

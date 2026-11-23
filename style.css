@@ -475,7 +475,8 @@ div.hardpoint-row .cost { color:var(--ink); }
 .daily-button { display:block; width:100%; margin:14px 0 4px; padding:9px 10px; text-align:left; border:1px dashed var(--line); }
 .daily-button b { color:var(--accent); }
 .daily-button small { display:block; color:var(--muted); margin-top:3px; }
-@media (max-width:700px) { .timeline { display:none; } .curse-card { border-color:var(--ink); }
+@media (max-width:700px) { .timeline { display:none; } }
+.curse-card { border-color:var(--ink); }
 .curse-card .power-family,.curse-card .blueprint-gain { color:var(--ink); }
 .curse-card .power-family::before { content:'!! '; }
 .perk-shop { margin-top:16px; display:grid; gap:4px; }
@@ -498,3 +499,23 @@ div.hardpoint-row .cost { color:var(--ink); }
 .tip button:hover { color:var(--accent); }
 .race { margin-left:8px; }
 @media (max-width:700px) { .route { top:auto; bottom:28px; right:4px; width:min(240px,80%); } .tip { bottom:26px; font-size:.64rem; } }
+
+/* Rarity colours: plain, green, blue, violet, gold. Mixed with the theme ink so every theme keeps contrast. */
+:root {
+  --tier-1: var(--muted);
+  --tier-2: color-mix(in oklab, #5fd47a 68%, var(--ink));
+  --tier-3: color-mix(in oklab, #5aa9ff 68%, var(--ink));
+  --tier-4: color-mix(in oklab, #c27dff 68%, var(--ink));
+  --tier-5: color-mix(in oklab, #ffb238 72%, var(--ink));
+}
+[data-tier="2"] { --tier: var(--tier-2); } [data-tier="3"] { --tier: var(--tier-3); }
+[data-tier="4"] { --tier: var(--tier-4); } [data-tier="5"] { --tier: var(--tier-5); }
+.draft-card[data-tier]:not([data-tier="1"]) { --line: var(--tier); }
+.draft-card[data-tier]:not([data-tier="1"]) .power-family,
+.draft-card[data-tier]:not([data-tier="1"]) .power-name { color: var(--tier); }
+.upgrade-name[data-tier]:not([data-tier="1"]),
+.build-relics li[data-tier]:not([data-tier="1"]),
+.build-weapons li[data-tier]:not([data-tier="1"]) span:first-child { color: var(--tier); }
+.weapon-rolls { color: var(--muted); font-size: .62rem; letter-spacing: .03em; line-height: 1.45; margin: 0 0 12px; white-space: pre-line; }
+@media (max-width:700px) { .weapon-rolls { grid-column: 2; margin: 0 0 4px; } }
+.build-weapons + .dossier-list .weapon-rolls, .dossier-list .weapon-rolls { display: block; margin: -2px 0 6px; }

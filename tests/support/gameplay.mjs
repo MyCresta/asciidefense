@@ -29,12 +29,14 @@ export function start(seed = 19, storage = new MemoryStorage(), resume = false) 
 
 export const precision = {
   name: 'Precision',
-  weights: { damage: 1.55, rate: 1.3, crit: 0.95, range: 0.5, bounty: 0.45, chain: 0.25, splash: 0.22, armor: 0.15, regen: 0.1 },
+  weights: { damage: 1.55, rate: 1.3, crit: 0.95, range: 0.5, bounty: 0.45, chain: 0.25, splash: 0.22, armor: 0.15, regen: 0.1,
+    lethality: 0.7, hunter: 0.4, incendiary: 0.3, chill: 0.15, barrier: 0.2, salvage: 0.3 },
   relics: ['headhunter', 'ember', 'overclock', 'twinshot', 'ward', 'scope']
 };
 export const ordnance = {
   name: 'Ordnance',
-  weights: { splash: 1.25, chain: 1.15, rate: 0.96, damage: 0.9, range: 0.65, bounty: 0.45, armor: 0.22, regen: 0.18, crit: 0.12 },
+  weights: { splash: 1.25, chain: 1.15, rate: 0.96, damage: 0.9, range: 0.65, bounty: 0.45, armor: 0.22, regen: 0.18, crit: 0.12,
+    lethality: 0.2, hunter: 0.3, incendiary: 0.5, chill: 0.3, barrier: 0.25, salvage: 0.3 },
   relics: ['fracture', 'tesla', 'repulse', 'frost', 'twinshot', 'overclock']
 };
 
@@ -120,6 +122,7 @@ export function snapshotCombat(game) {
     armory: game.armory, fuseUsed: game.fuseUsed,
     scrap: game.scrap, kills: game.kills, enemies: game.enemies,
     levels: game.levels, choices: game.choices, powers: game.powers,
-    nextDraft: game.nextDraft, nextBoss: game.nextBoss, bossKills: game.bossKills
+    nextDraft: game.nextDraft, nextBoss: game.nextBoss, bossKills: game.bossKills,
+    barrier: game.barrier, relicState: game.relicState, deck: game.deck
   });
 }

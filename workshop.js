@@ -1,7 +1,7 @@
-import { UPGRADES } from './content.js?v=3.8.0';
-import { cost as relicCost } from './relic-effects.js?v=3.8.0';
-import { CURSES, applyCurse, cursed } from './hazards.js?v=3.8.0';
-import { WEAPONS, MAX_GRADE, GRADE_NAMES, TRAITS, availableWeapons, rollWeapon, receiveWeapon, replaceWeapon, forgePrice, mountTitle } from './weapons.js?v=3.8.0';
+import { UPGRADES } from './content.js?v=3.9.0';
+import { cost as relicCost } from './relic-effects.js?v=3.9.0';
+import { CURSES, applyCurse, cursed } from './hazards.js?v=3.9.0';
+import { WEAPONS, MAX_GRADE, GRADE_NAMES, TRAITS, MODS, ROLL_STATS, ROLL_MIN, TEMPER_MAX, availableWeapons, rollWeapon, receiveWeapon, replaceWeapon, forgePrice, mountTitle, setGrade, rollText } from './weapons.js?v=3.9.0';
 
 const GRADES = ['Standard', 'Refined', 'Masterwork'];
 const RESERVES = new Set(['scrap', 'prospect']);
@@ -12,7 +12,7 @@ export function createWorkshop() {
   return {
     caches: 1, found: 0, commissioned: 0, tunes: 0, repairs: 0, opened: 0,
     rerolls: 0, dryKills: 0, lastDrop: -1, offer: [], returnStatus: 'running',
-    armsCaches: 0, weaponDue: 0, pending: null
+    armsCaches: 0, weaponDue: 0, pending: null, drafts: 0
   };
 }
 
@@ -20,6 +20,7 @@ export function validWorkshop(state, levels, time, status) {
   if (!state || typeof state !== 'object' || Array.isArray(state)) return false;
   const counters = ['caches', 'found', 'commissioned', 'tunes', 'repairs', 'opened', 'rerolls', 'dryKills', 'armsCaches', 'weaponDue'];
   if (!counters.every(key => natural(state[key]))) return false;
+  if (state.drafts !== undefined && !natural(state.drafts)) return false;
   if (!Number.isFinite(state.lastDrop) || state.lastDrop < -1 || state.lastDrop > time) return false;
   if (state.returnStatus !== 'running' && state.returnStatus !== 'paused') return false;
   if (!Array.isArray(state.offer) || ![0, 3].includes(state.offer.length)) return false;
@@ -44,10 +45,20 @@ function validBlueprint(item, levels) {
     && Number.isInteger(item.levels) && item.levels >= 1 && item.levels <= item.grade;
 }
 
+export function validRolls(rolls) {
+  return rolls === undefined || (rolls !== null && typeof rolls === 'object'
+    && Object.keys(ROLL_STATS).every(key => Number.isInteger(rolls[key]) && rolls[key] >= ROLL_MIN && rolls[key] <= TEMPER_MAX));
+}
+
+export function validMods(mods) {
+  return mods === undefined || (Array.isArray(mods) && mods.length <= 3 && new Set(mods).size === mods.length
+    && mods.every(key => typeof key === 'string' && Object.hasOwn(MODS, key)));
+}
+
 function validWeaponItem(item) {
   return item !== null && typeof item === 'object' && Object.hasOwn(WEAPONS, item.weapon)
     && item.key === 'arm:' + item.weapon && Number.isInteger(item.grade) && item.grade >= 1 && item.grade <= MAX_GRADE
-    && (item.trait === null || Object.hasOwn(TRAITS, item.trait));
+    && (item.trait === null || Object.hasOwn(TRAITS, item.trait)) && validRolls(item.rolls) && validMods(item.mods);
 }
 
 const isWeapon = item => item?.weapon !== undefined;
@@ -64,12 +75,13 @@ function maybeCurse(game, offer) {
   return offer;
 }
 
+// Advanced upgrades join the cache pool a few minutes in, once the basics are rolling.
 function eligible(game) {
-  return Object.keys(UPGRADES).filter(key => game.levels[key] < UPGRADES[key].maxLevel);
+  return Object.keys(UPGRADES).filter(key => game.levels[key] < UPGRADES[key].maxLevel && game.time >= (UPGRADES[key].after || 0));
 }
 
 function salvageValue(game) {
-  return 45 + Math.min(205, Math.floor(game.time / 30) * 4);
+  return Math.round((45 + Math.min(205, Math.floor(game.time / 30) * 4)) * (game.powers?.recycler ? 1.5 : 1));
 }
 
 function assayPayouts(game) {
@@ -99,17 +111,19 @@ function cashOut(game) {
 export function awardSalvage(game, enemy) {
   const w = game.workshop;
   w.dryKills++;
+  // Magpie: elites always drop a big cache, on a short timer of their own.
   const magpie = enemy.elite && game.powers?.magpie;
-  if (!enemy.boss && !magpie) {
-    if (w.found === 0) {
+  if (!enemy.boss) {
+    if (w.found === 0 && !magpie) {
       if (w.dryKills < 5) return false;
     } else {
       const lateDelay = Math.min(65, Math.max(0, game.time - 240) / 8);
-      const delay = Math.min(26, 12 + game.time / 22) + lateDelay;
-      const minimum = enemy.elite ? Math.max(12, delay * .72) : delay;
-      if (game.time - w.lastDrop < minimum) return false;
-      const chance = enemy.elite ? .48 : .065 + Math.max(0, w.dryKills - 12) * .008;
-      if (w.dryKills < 26 && game.random() >= chance) return false;
+      const sooner = 1 - .06 * (game.levels.salvage || 0) - (game.powers?.scavenger ? .15 : 0);
+      const delay = (Math.min(26, 12 + game.time / 22) + lateDelay) * sooner;
+      const minimum = magpie ? Math.min(20, delay * .4) : enemy.elite ? Math.max(12, delay * .72) : delay;
+      if (w.lastDrop >= 0 && game.time - w.lastDrop < minimum) return false;
+      const chance = magpie ? 1 : enemy.elite ? .48 : .065 + Math.max(0, w.dryKills - 12) * .008;
+      if (w.dryKills < 26 && chance < 1 && game.random() >= chance) return false;
     }
   }
   w.found++;
@@ -118,7 +132,7 @@ export function awardSalvage(game, enemy) {
   const here = Number.isFinite(enemy.x) && Number.isFinite(enemy.y);
   if (!enemy.boss && !enemy.elite && game.random() >= .15) {
     smallCache(game);
-    if (game.powers?.lucky && game.random() < .35) smallCache(game);
+    if (game.powers?.lucky && game.random() < (game.powers.lucky > 1 ? .6 : .35)) smallCache(game);
     if (here) game.effect(enemy.x, enemy.y, 'cache', 3, .6);
     return true;
   }
@@ -155,7 +169,7 @@ export function smallCache(game) {
 }
 
 function rollGrade(game) {
-  const roll = game.random();
+  const roll = game.random() * (game.powers?.appraiser ? .55 : 1);
   if (roll < .06) return 3;
   if (roll < .32) return 2;
   return 1;
@@ -222,10 +236,15 @@ export function describeBlueprint(game, item) {
     const mounts = game.armory.mounts;
     const held = mounts.find(mount => mount.key === item.weapon);
     const name = (trait ? trait.name + ' ' : '') + gun.name;
+    const maxed = held && held.grade >= MAX_GRADE;
+    const tempered = maxed && Object.keys(ROLL_STATS).some(stat => (held.rolls?.[stat] ?? 0) < TEMPER_MAX);
     const effect = held
-      ? (held.grade >= MAX_GRADE ? 'Already G' + MAX_GRADE + '. Pick to reclaim +' + salvageValue(game) + ' scrap' : 'Reinforce yours to G' + Math.min(MAX_GRADE, Math.max(held.grade + 1, grade)))
+      ? (maxed ? (tempered ? 'Temper your G' + MAX_GRADE + ': +5% to its weakest roll' : 'Fully tempered. Pick to reclaim +' + salvageValue(game) + ' scrap')
+        : 'Reinforce yours to G' + Math.min(MAX_GRADE, Math.max(held.grade + 1, grade)) + ', keeping the best rolls')
       : mounts.length < game.armory.slots ? 'Fits empty hardpoint ' + (mounts.length + 1) : 'Replace a fitted weapon';
-    return { name, grade, rarity: GRADE_NAMES[grade - 1], description: gun.description + (trait ? ' ' + trait.description : ''), effect, weapon: true, icon: gun.icon, role: gun.role };
+    const mods = (item.mods || []).map(key => MODS[key].name).join(', ');
+    return { name, grade, rarity: GRADE_NAMES[grade - 1], description: trait ? trait.description : gun.description,
+      effect, rolls: rollText(item.rolls) + (mods ? '\nMods: ' + mods : ''), weapon: true, icon: gun.icon, role: gun.role };
   }
   if (key === 'prospect') {
     return {
@@ -346,11 +365,18 @@ export function workshopCosts(game) {
   const price = raw => relicCost(game, Math.min(Number.MAX_SAFE_INTEGER, Math.round(raw)));
   return {
     commission: remaining ? price(40 * 1.4 ** w.commissioned + 10 * w.commissioned) : Infinity,
-    forge: game.armory.mounts.map(mount => Number.isFinite(forgePrice(mount)) ? price(forgePrice(mount)) : Infinity),
+    forge: game.armory.mounts.map(mount => Number.isFinite(forgePrice(mount)) ? price(forgePrice(mount) * (1 - .15 * (game.powers?.smelter || 0))) : Infinity),
     repair: game.hp < game.maxHp ? price((24 + 9 * w.repairs + 3 * Math.floor(game.time / 50)) * (cursed(game, 'hunger') ? 2 : 1)) : Infinity,
-    tune: price(30 + 12 * w.tunes + 1.5 * w.tunes ** 2),
-    reroll: game.status === 'cache' && remaining > 3 ? price(14 * 1.9 ** w.rerolls + 2 * Math.floor(game.time / 70)) : Infinity
+    tune: price(30 + 12 * w.tunes + 1.5 * w.tunes ** 2 + .05 * w.tunes ** 3),
+    relic: relicDraftOpen(game) ? price(180 * 1.5 ** (w.drafts || 0) + 2 * Math.floor(game.time / 30)) : Infinity,
+    reroll: game.status === 'cache' && remaining > 3
+      ? (game.powers?.broker && w.rerolls === 0 ? 0 : price(14 * 1.9 ** w.rerolls + 2 * Math.floor(game.time / 70))) : Infinity
   };
+}
+
+// A bought relic draft needs at least one relic left to offer.
+function relicDraftOpen(game) {
+  return typeof game.openDraft === 'function' && Object.keys(game.powers || {}).length < 200;
 }
 
 export function rerollCache(game) {
@@ -370,13 +396,13 @@ export function forgeWeapon(game, slot) {
   const price = workshopCosts(game).forge[slot];
   if (!canWork(game) || !mount || !Number.isFinite(price) || game.scrap < price) return false;
   game.scrap -= price;
-  mount.grade++;
+  setGrade(game, mount, mount.grade + 1);
   game.note(`${mountTitle(mount)} forged.`, 'upgrade');
   return true;
 }
 
 export function foundry(game, service) {
-  if (!canWork(game) || !['commission', 'repair', 'tune'].includes(service)) return false;
+  if (!canWork(game) || !['commission', 'repair', 'tune', 'relic'].includes(service)) return false;
   const price = workshopCosts(game)[service];
   if (!Number.isFinite(price) || game.scrap < price) return false;
   const w = game.workshop;
@@ -385,6 +411,10 @@ export function foundry(game, service) {
     w.caches++;
     w.commissioned++;
     game.note('Big cache ordered.', 'upgrade');
+  } else if (service === 'relic') {
+    w.drafts = (w.drafts || 0) + 1;
+    game.note('Relic draft bought.', 'upgrade');
+    game.openDraft('bought');
   } else if (service === 'repair') {
     const previous = game.hp;
     game.hp = Math.min(game.maxHp, previous + Math.ceil(game.maxHp * .35));

@@ -39,24 +39,24 @@ test('the catalog contains distinct diagrams and complete encounter profiles', (
   }
 });
 
-test('stat relics apply both sides of each trade and honor health and timing thresholds', () => {
+test('stat relics apply both sides of each trade, add same-kind bonuses and honor thresholds', () => {
   const game = arena({rail:1, repeater:1, clockwork:1, redline:1, ballast:1, glass:1,
     regicide:1, mesh:1, precision:1, caliper:2, bulwark:3, triage:2});
   game.bossKills = 7;
   near(Relics.stat(game, 'range', 40), 45);
-  near(Relics.stat(game, 'rate', 1), 1.45 * .88);
-  near(Relics.stat(game, 'damage', 10), 10 * 1.45 * .8 * 1.88);
+  near(Relics.stat(game, 'rate', 1), 1.35 * .88);
+  near(Relics.stat(game, 'damage', 10), 10 * (1 + .35 + .6) * .8);
   near(Relics.stat(game, 'splash', 12), 6);
   near(Relics.stat(game, 'chain', 1), 3);
   near(Relics.stat(game, 'armor', 1.5), 7.5);
-  near(Relics.stat(game, 'critChance', .1), .51);
+  near(Relics.stat(game, 'critChance', .1), .44);
   near(Relics.stat(game, 'critChance', .95), 1);
   near(Relics.criticalMultiplier(game), 1.6);
   near(Relics.stat(game, 'regen', .2), .2);
   game.hp = 49;
   game.time = 13;
   near(Relics.stat(game, 'regen', .2), 1.6);
-  near(Relics.stat(game, 'rate', 1), 1.45 * .88 * 1.55 * 1.45);
+  near(Relics.stat(game, 'rate', 1), (1 + .35 + .4 + .45) * .88);
 });
 
 test('targeting, focus, group size, and distance change shot output', () => {
@@ -65,12 +65,12 @@ test('targeting, focus, group size, and distance change shot output', () => {
   const neighbor = hostile(35,12);
   game.enemies = [target, neighbor];
   game.focusId = target.id;
-  near(Relics.hitFactor(game, target, true), 1.30 * 1.45 * 1.35);
+  near(Relics.hitFactor(game, target, true), 1 + .3 + .45 + .35);
   game.enemies.push(hostile(34));
-  near(Relics.hitFactor(game, target, false), 1.30 * 1.35 * 1.4);
+  near(Relics.hitFactor(game, target, false), 1 + .3 + .35 + .4);
   target.x = 10;
   target.hp--;
-  near(Relics.hitFactor(game, target, true), 1.35 * 1.35);
+  near(Relics.hitFactor(game, target, true), 1 + .35 + .35);
 });
 
 test('control fields and cyclic damage respect range, time, and living targets', () => {

@@ -39,9 +39,15 @@ export function availableWeapons(game) {
 }
 
 export const MOUNT_OUTPUT = [1, .65, .5];
-export const MAX_GRADE = 5;
-export const GRADE_NAMES = ['Standard', 'Refined', 'Masterwork', 'Exotic', 'Mythic'];
-const GRADE_SCALE = [1, 1.25, 1.5, 1.8, 2.15];
+export const MAX_GRADE = 10;
+export const GRADE_NAMES = ['Standard', 'Refined', 'Tuned', 'Masterwork', 'Exotic', 'Prime', 'Mythic', 'Legend', 'Ascendant', 'Apex'];
+// Each grade adds a little less than the one before, so a weapon keeps growing all run.
+const GRADE_SCALE = [1, 1.2, 1.38, 1.54, 1.68, 1.8, 1.9, 2, 2.09, 2.18];
+// A weapon gains a random mod when it reaches each of these grades.
+export const MOD_GRADES = [3, 6, 9];
+// Every find rolls its own damage, fire rate and reach, from -8% to +12%.
+export const ROLL_MIN = -8, ROLL_MAX = 12, TEMPER_MAX = 20;
+export const ROLL_STATS = { power: 'dmg', cadence: 'rate', reach: 'reach' };
 
 // Each weapon bends the shared upgrades its own way: blasts, arcs or critical hits.
 export const ROLE_RULES = {
@@ -63,7 +69,7 @@ export function earnHardpoint(game) {
 
 // The forge raises a fitted weapon one grade. Each grade costs more than the last.
 export function forgePrice(mount) {
-  return mount && mount.grade < MAX_GRADE ? Math.round(150 * 2.1 ** (mount.grade - 1)) : Infinity;
+  return mount && mount.grade < MAX_GRADE ? Math.round(120 * 1.52 ** (mount.grade - 1)) : Infinity;
 }
 
 // Every found weapon rolls one trait, so the same frame can play differently between runs.
@@ -72,14 +78,41 @@ export const TRAITS = {
   long: { name: 'Long', description: '+15% reach.', reach: 1.15 },
   heavy: { name: 'Heavy', description: '+35% damage, -15% fire rate.', scale: 1.35, cadence: .85 },
   searing: { name: 'Searing', description: 'Hits set the target burning.', burn: .5 },
-  forked: { name: 'Forked', description: 'Each hit chains to one more enemy.', chains: 1 }
+  forked: { name: 'Forked', description: 'Each hit chains to one more enemy.', chains: 1 },
+  keen: { name: 'Keen', description: '+10% critical chance.', crit: .1 },
+  chilling: { name: 'Chilling', description: 'Hits slow the target for 2 seconds.', chill: 2 },
+  hunting: { name: 'Hunting', description: '+30% damage to elites and sovereigns.', hunter: .3 },
+  volatile: { name: 'Volatile', description: 'Kills burst for 40% damage nearby.', burst: .4 },
+  capacitor: { name: 'Capacitor', description: 'Every 5th shot deals +150% damage.', charge: 5 }
+};
+
+// Mods are rolled at random as a weapon climbs grades, so no two weapons grow alike.
+export const MODS = {
+  hollow: { name: 'Hollow points', short: '+15% dmg', scale: 1.15 },
+  servo: { name: 'Servo feed', short: '+12% rate', cadence: 1.12 },
+  optic: { name: 'Scope rail', short: '+12% reach', reach: 1.12 },
+  arc: { name: 'Arc emitter', short: '+1 arc', chains: 1 },
+  incendiary: { name: 'Igniter', short: 'Hits burn', burn: .3 },
+  cryo: { name: 'Coolant line', short: 'Hits slow', chill: 1.5 },
+  overpressure: { name: 'Overpressure', short: '+8% crit, harder crits', crit: .08, critPower: 1.2 },
+  ricochet: { name: 'Ricochet', short: 'Kills bounce 50%', bounce: .5 },
+  shredder: { name: 'Shredder', short: '+50% vs shields', shred: .5 },
+  reaper: { name: 'Culling edge', short: 'Executes below 8%', cull: .08 },
+  scavenger: { name: 'Salvage hook', short: 'Kills +1 scrap', loot: 1 },
+  twin: { name: 'Twin feed', short: '15% double shot', twin: .15 },
+  blast: { name: 'Shell casing', short: 'Small burst 40%', burst: .4 }
 };
 
 // A weapon trait plus the matching relic forms a combo.
 export const WEAPON_COMBOS = {
   firestorm: { name: 'Firestorm', trait: 'searing', power: 'ember', description: 'Burning enemies spread fire when they die.' },
   stormcell: { name: 'Storm cell', trait: 'forked', power: 'tesla', description: 'Forked weapons chain twice more.' },
-  hairtrigger: { name: 'Hair trigger', trait: 'rapid', power: 'overclock', description: 'Rapid weapons fire 15% faster again.' }
+  hairtrigger: { name: 'Hair trigger', trait: 'rapid', power: 'overclock', description: 'Rapid weapons fire 15% faster again.' },
+  glacier: { name: 'Glacier', trait: 'chilling', power: 'frost', description: 'Chilling weapons freeze targets for 1 second.' },
+  manhunt: { name: 'Manhunt', trait: 'hunting', power: 'headhunter', description: 'Hunting weapons deal +30% more to elites and sovereigns.' },
+  chainfire: { name: 'Chain fire', trait: 'volatile', power: 'bloom', description: 'Volatile bursts are twice as wide.' },
+  overload: { name: 'Overload', trait: 'capacitor', power: 'overclock', description: 'Capacitor weapons charge every 3rd shot.' },
+  assassin: { name: 'Assassin', trait: 'keen', power: 'precision', description: 'Keen weapons gain 10% more critical chance.' }
 };
 
 export function weaponComboActive(game, key) {
@@ -101,27 +134,40 @@ export function spreadFire(game, fallen) {
 }
 
 const validMount = mount => mount && Object.hasOwn(WEAPONS, mount.key);
+const pick = (game, list) => list[Math.min(list.length - 1, Math.floor(game.random() * list.length))];
+const rollOf = (mount, stat) => 1 + (mount.rolls?.[stat] || 0) / 100;
+
+// All of a mount's trait and mods as one list of effect tables.
+function parts(mount) {
+  return [TRAITS[mount.trait], ...(mount.mods || []).map(key => MODS[key])].filter(Boolean);
+}
 
 export function mountStats(mount, game = null) {
   const weapon = WEAPONS[mount.key];
-  const trait = TRAITS[mount.trait] || {};
   const grade = Math.min(MAX_GRADE, Math.max(1, mount.grade || 1));
-  return {
-    scale: weapon.scale * GRADE_SCALE[grade - 1] * (trait.scale || 1),
-    cadence: weapon.cadence * (trait.cadence || 1),
-    reach: weapon.reach * (trait.reach || 1),
-    chains: (mount.key === 'coil' ? 2 : 0) + (trait.chains || 0),
-    burn: trait.burn || 0,
-    ...(game ? comboBoost(game, mount) : {})
+  const stats = {
+    scale: weapon.scale * GRADE_SCALE[grade - 1] * rollOf(mount, 'power'),
+    cadence: weapon.cadence * rollOf(mount, 'cadence'),
+    reach: weapon.reach * rollOf(mount, 'reach'),
+    chains: mount.key === 'coil' ? 2 : 0,
+    burn: 0, chill: 0, hunter: 0, burst: 0, crit: 0, critPower: 1, bounce: 0, shred: 0, cull: 0, loot: 0, twin: 0, charge: 0
   };
+  for (const part of parts(mount)) {
+    for (const key of ['scale', 'cadence', 'reach', 'critPower']) if (part[key]) stats[key] *= part[key];
+    for (const key of ['chains', 'burn', 'chill', 'hunter', 'burst', 'crit', 'bounce', 'shred', 'cull', 'loot', 'twin']) if (part[key]) stats[key] += part[key];
+    if (part.charge) stats.charge = part.charge;
+  }
+  return game ? comboBoost(game, mount, stats) : stats;
 }
 
-function comboBoost(game, mount) {
-  const base = mountStats(mount);
+function comboBoost(game, mount, stats) {
   const combo = comboFor(game, mount.trait);
-  if (combo === 'stormcell') return { chains: base.chains + 2 };
-  if (combo === 'hairtrigger') return { cadence: base.cadence * 1.15 };
-  return {};
+  if (combo === 'stormcell') stats.chains += 2;
+  if (combo === 'hairtrigger') stats.cadence *= 1.15;
+  if (combo === 'manhunt') stats.hunter += .3;
+  if (combo === 'overload') stats.charge = 3;
+  if (combo === 'assassin') stats.crit += .1;
+  return stats;
 }
 
 export function mountTitle(mount) {
@@ -129,22 +175,60 @@ export function mountTitle(mount) {
   return (trait ? trait.name + ' ' : '') + WEAPONS[mount.key].name + ' G' + (mount.grade || 1);
 }
 
+// The rolls and mods that make this copy of a weapon different from the next.
+export function rollText(rolls) {
+  if (!rolls) return '';
+  return Object.entries(ROLL_STATS).map(([key, label]) => (rolls[key] >= 0 ? '+' : '') + rolls[key] + '% ' + label).join('  ');
+}
+
+export function modText(mount) {
+  return (mount.mods || []).map(key => MODS[key].name + ' (' + MODS[key].short + ')').join(', ');
+}
+
+export function describeMount(mount) {
+  return [rollText(mount.rolls), modText(mount)].filter(Boolean).join('. ');
+}
+
+export function rollStats(game) {
+  const roll = () => ROLL_MIN + Math.floor(game.random() * (ROLL_MAX - ROLL_MIN + 1));
+  return { power: roll(), cadence: roll(), reach: roll() };
+}
+
+// Raise a mount to a grade, rolling a new mod for each mod grade it passes.
+export function setGrade(game, mount, grade) {
+  const from = mount.grade || 1;
+  mount.grade = Math.min(MAX_GRADE, Math.max(from, grade));
+  for (const at of MOD_GRADES) {
+    if (from < at && mount.grade >= at) {
+      const open = Object.keys(MODS).filter(key => !(mount.mods || []).includes(key));
+      if (!open.length) continue;
+      const mod = pick(game, open);
+      mount.mods = [...(mount.mods || []), mod];
+      game.note?.(WEAPONS[mount.weapon ?? mount.key].name + ' gained ' + MODS[mod].name + '.', 'upgrade');
+    }
+  }
+  return mount;
+}
+
 // The starting weapon is drawn at random; later weapons only come from salvage caches.
 export function initWeapons(game, primary = null) {
   const keys = availableWeapons(game);
-  const key = Object.hasOwn(WEAPONS, primary) ? primary : keys[Math.min(keys.length - 1, Math.floor(game.random() * keys.length))];
-  game.armory = { slots: 1, mounts: [{ key, grade: 1, trait: null, cooldown: 0 }] };
+  const key = Object.hasOwn(WEAPONS, primary) ? primary : pick(game, keys);
+  game.armory = { slots: 1, mounts: [{ key, grade: 1, trait: null, cooldown: 0, rolls: rollStats(game), mods: [] }] };
 }
 
+// Later finds start at higher grades, so a replacement can keep up with a forged weapon.
 export function rollWeapon(game, exclude = []) {
   const keys = availableWeapons(game).filter(key => !exclude.includes(key));
   const pool = keys.length ? keys : availableWeapons(game);
-  const weapon = pool[Math.min(pool.length - 1, Math.floor(game.random() * pool.length))];
-  const traits = Object.keys(TRAITS);
-  const trait = traits[Math.min(traits.length - 1, Math.floor(game.random() * traits.length))];
+  const weapon = pick(game, pool);
+  const trait = pick(game, Object.keys(TRAITS));
   const roll = game.random();
-  const grade = roll < .08 + Math.min(.12, game.time / 3000) ? 3 : roll < .38 ? 2 : 1;
-  return { key: 'arm:' + weapon, weapon, grade, trait };
+  const floor = Math.floor(Math.min(game.time, 2400) / 600);
+  const grade = Math.min(MAX_GRADE, 1 + floor + (roll < .08 + Math.min(.12, game.time / 3000) ? 2 : roll < .38 ? 1 : 0));
+  const item = { key: 'arm:' + weapon, weapon, grade: 1, trait, rolls: rollStats(game), mods: [] };
+  setGrade({ random: game.random }, item, grade);
+  return item;
 }
 
 export function maxWeaponRange(game) {
@@ -152,25 +236,51 @@ export function maxWeaponRange(game) {
   return mounts?.length ? game.range * Math.max(...mounts.map(m => mountStats(m).reach)) : game.range;
 }
 
-// Install a found weapon. Returns 'installed', 'upgraded', 'full' (the player must choose a slot) or false.
+// A copy of a maxed weapon tempers its weakest roll instead.
+export function temper(mount) {
+  if (!mount.rolls) mount.rolls = { power: 0, cadence: 0, reach: 0 };
+  const [weakest] = Object.keys(ROLL_STATS).sort((a, b) => mount.rolls[a] - mount.rolls[b]);
+  if (mount.rolls[weakest] >= TEMPER_MAX) return null;
+  mount.rolls[weakest] = Math.min(TEMPER_MAX, mount.rolls[weakest] + 5);
+  return weakest;
+}
+
+// Install a found weapon. Returns 'installed', 'upgraded', 'tempered', 'full' (the player must choose a slot) or false.
 export function receiveWeapon(game, item) {
   if (!item || !Object.hasOwn(WEAPONS, item.weapon)) return false;
   const { mounts, slots } = game.armory;
   const held = mounts.find(mount => mount.key === item.weapon);
   if (held) {
-    if (held.grade >= MAX_GRADE) return 'full';
-    held.grade = Math.min(MAX_GRADE, Math.max(held.grade + 1, item.grade));
+    if (held.grade >= MAX_GRADE) {
+      const stat = temper(held);
+      if (!stat) return 'full';
+      game.note(mountTitle(held) + ' tempered: ' + ROLL_STATS[stat] + ' ' + held.rolls[stat] + '%.', 'upgrade');
+      return 'tempered';
+    }
+    // A copy keeps the better of each roll and pushes the grade up.
+    if (item.rolls) {
+      held.rolls = held.rolls || { power: 0, cadence: 0, reach: 0 };
+      for (const key of Object.keys(ROLL_STATS)) held.rolls[key] = Math.max(held.rolls[key], item.rolls[key]);
+    }
+    setGrade(game, held, Math.max(held.grade + 1, item.grade));
     if (!held.trait) held.trait = item.trait;
     game.note(mountTitle(held) + ' reinforced.', 'upgrade');
     return 'upgraded';
   }
   if (mounts.length < slots) {
-    const mount = { key: item.weapon, grade: item.grade, trait: item.trait, cooldown: 0 };
+    const mount = fitted(item, 0);
     mounts.push(mount);
     game.note(mountTitle(mount) + ' fitted to hardpoint ' + mounts.length + '.', 'upgrade');
     return 'installed';
   }
   return 'full';
+}
+
+function fitted(item, cooldown) {
+  const mount = { key: item.weapon, grade: item.grade, trait: item.trait, cooldown };
+  if (item.rolls) mount.rolls = { ...item.rolls };
+  if (item.mods) mount.mods = [...item.mods];
+  return mount;
 }
 
 // Replace the weapon on a hardpoint with a found weapon. Its recharge carries over.
@@ -179,7 +289,7 @@ export function replaceWeapon(game, item, slot) {
   if (!Number.isInteger(slot) || slot < 0 || slot >= mounts.length) return false;
   if (mounts.some((mount, i) => i !== slot && mount.key === item.weapon)) return false;
   const old = mounts[slot];
-  mounts[slot] = { key: item.weapon, grade: item.grade, trait: item.trait, cooldown: old.cooldown };
+  mounts[slot] = fitted(item, old.cooldown);
   game.note(mountTitle(mounts[slot]) + ' replaced ' + WEAPONS[old.key].name + ' on hardpoint ' + (slot + 1) + '.', 'upgrade');
   return true;
 }
@@ -199,6 +309,74 @@ function secondaryTargets(game, target, reach, scatter) {
   return contacts.sort((a, b) => a.along - b.along).slice(0, 2);
 }
 
+function burstAround(game, center, damage, radius) {
+  game.effect(center.x, center.y, 'splash', radius);
+  for (const enemy of game.enemies) {
+    if (enemy !== center && enemy.hp > 0 && Math.hypot(enemy.x - center.x, enemy.y - center.y) <= radius) game.strike(enemy, damage, false);
+  }
+}
+
+function fireMount(game, mount, slot, stats, target, reach, bonus = 1) {
+  let scale = stats.scale * MOUNT_OUTPUT[slot] * bonus;
+  if (stats.charge) {
+    mount.shots = ((mount.shots || 0) + 1) % stats.charge;
+    if (mount.shots === 0) scale *= 2.5;
+  }
+  if (slot === 0 && game.powers?.echo && game.relicState) {
+    game.relicState.echo = ((game.relicState.echo || 0) + 1) % 4;
+    if (game.relicState.echo === 0) scale *= 2;
+  }
+  if (stats.hunter && (target.elite || target.boss)) scale *= 1 + stats.hunter;
+  if (stats.shred && (target.shield > 0 || target.trait === 'plated' || target.type === 'brute')) scale *= 1 + stats.shred;
+  const hit = game.fire(target, {
+    kind: mount.key === 'bolt' ? 'shot' : mount.key,
+    scale,
+    extraChains: stats.chains,
+    role: { ...ROLE_RULES[mount.key], crit: (ROLE_RULES[mount.key]?.crit || 0) + stats.crit,
+      critPower: (ROLE_RULES[mount.key]?.critPower || 1) * stats.critPower },
+    reach
+  });
+  if (stats.burn && target.hp > 0) {
+    const remaining = Math.max(0, target.burnUntil - game.time) * target.burnDps;
+    target.burnDps = (remaining + hit * stats.burn) / 3;
+    target.burnUntil = game.time + 3;
+    game.effect(target.x, target.y, 'burn', 3);
+  }
+  if (stats.chill && target.hp > 0) {
+    target.slowUntil = Math.max(target.slowUntil, game.time + stats.chill);
+    if (comboFor(game, mount.trait) === 'glacier') target.frozenUntil = game.time + 1;
+  }
+  if (stats.cull && target.hp > 0 && !target.boss && target.hp <= stats.cull * target.maxHp) game.hurt(target, target.hp + target.shield);
+  if (mount.key === 'mortar') {
+    game.effect(target.x, target.y, 'splash', 9);
+    for (const enemy of game.enemies) {
+      if (enemy !== target && enemy.hp > 0 && Math.hypot(enemy.x - target.x, enemy.y - target.y) <= 9) game.strike(enemy, hit * .7, false);
+    }
+  }
+  if (mount.key === 'cryo') {
+    for (const enemy of game.enemies) {
+      if (enemy.hp > 0 && Math.hypot(enemy.x - target.x, enemy.y - target.y) <= 7) enemy.slowUntil = Math.max(enemy.slowUntil, game.time + 2.5);
+    }
+    game.effect(target.x, target.y, 'chill', 7, .5);
+  }
+  if (mount.key === 'scatter' || mount.key === 'lance') {
+    const scatter = mount.key === 'scatter';
+    for (const {enemy} of secondaryTargets(game, target, reach, scatter)) {
+      game.beam(enemy, mount.key);
+      game.strike(enemy, hit * (scatter ? .8 : .85), true);
+    }
+  }
+  if (target.hp <= 0) {
+    if (stats.burst) burstAround(game, target, hit * stats.burst, comboFor(game, mount.trait) === 'chainfire' ? 14 : 7);
+    if (stats.loot) game.scrap += stats.loot;
+    if (stats.bounce) {
+      const next = game.nearest(target, 24, new Set([target.id]));
+      if (next) { game.beam(next, 'twin', target); game.strike(next, hit * stats.bounce, true); }
+    }
+  }
+  return hit;
+}
+
 export function fireMounts(game, dt) {
   for (const [slot, mount] of game.armory.mounts.entries()) {
     mount.cooldown = Math.max(0, mount.cooldown - dt);
@@ -208,37 +386,10 @@ export function fireMounts(game, dt) {
     const focused = game.focusId && game.enemies.find(e => e.id === game.focusId && e.hp > 0 && Math.hypot(e.x, e.y) <= reach);
     const target = focused || game.nearest({x: 0, y: 0}, reach);
     if (!target) continue;
-    const hit = game.fire(target, {
-      kind: mount.key === 'bolt' ? 'shot' : mount.key,
-      scale: stats.scale * MOUNT_OUTPUT[slot],
-      extraChains: stats.chains,
-      role: ROLE_RULES[mount.key],
-      reach
-    });
-    if (stats.burn && target.hp > 0) {
-      const remaining = Math.max(0, target.burnUntil - game.time) * target.burnDps;
-      target.burnDps = (remaining + hit * stats.burn) / 3;
-      target.burnUntil = game.time + 3;
-      game.effect(target.x, target.y, 'burn', 3);
-    }
-    if (mount.key === 'mortar') {
-      game.effect(target.x, target.y, 'splash', 9);
-      for (const enemy of game.enemies) {
-        if (enemy !== target && enemy.hp > 0 && Math.hypot(enemy.x - target.x, enemy.y - target.y) <= 9) game.strike(enemy, hit * .7, false);
-      }
-    }
-    if (mount.key === 'cryo') {
-      for (const enemy of game.enemies) {
-        if (enemy.hp > 0 && Math.hypot(enemy.x - target.x, enemy.y - target.y) <= 7) enemy.slowUntil = Math.max(enemy.slowUntil, game.time + 2.5);
-      }
-      game.effect(target.x, target.y, 'chill', 7, .5);
-    }
-    if (mount.key === 'scatter' || mount.key === 'lance') {
-      const scatter = mount.key === 'scatter';
-      for (const {enemy} of secondaryTargets(game, target, reach, scatter)) {
-        game.beam(enemy, mount.key);
-        game.strike(enemy, hit * (scatter ? .8 : .85), true);
-      }
+    fireMount(game, mount, slot, stats, target, reach);
+    if (stats.twin && game.random() < stats.twin) {
+      const again = target.hp > 0 ? target : game.nearest({x: 0, y: 0}, reach);
+      if (again) fireMount(game, mount, slot, stats, again, reach);
     }
     mount.cooldown = 1 / (game.rate * stats.cadence);
   }

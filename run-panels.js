@@ -1,12 +1,12 @@
-import { WEAPONS, WEAPON_COMBOS, mountTitle } from './weapons.js?v=3.8.0';
-import { PERKS, buyPerk, perkBank, readPerks } from './perks.js?v=3.8.0';
-import { workshopCosts, describeBlueprint, rerollCache, closeCache, fitChoices, cancelFit } from './workshop.js?v=3.8.0';
-import { BLUEPRINTS, ENEMIES, RUN_PROFILES, POWERS, SYNERGIES, UPGRADES } from './content.js?v=3.8.0';
-import { ENEMY_PORTRAITS } from './art.js?v=3.8.0';
-import { paintPortrait } from './pixel-art.js?v=3.8.0';
-import { vectorElement } from './vector-art.js?v=3.8.0';
-import { formatTime } from './engine.js?v=3.8.0';
-import { $, decorateFrame, drawStats, element, pad, setText, tierName } from './ui.js?v=3.8.0';
+import { WEAPONS, WEAPON_COMBOS, GRADE_NAMES, mountTitle, describeMount } from './weapons.js?v=3.9.0';
+import { PERKS, buyPerk, perkBank, readPerks } from './perks.js?v=3.9.0';
+import { workshopCosts, describeBlueprint, rerollCache, closeCache, fitChoices, cancelFit } from './workshop.js?v=3.9.0';
+import { BLUEPRINTS, ENEMIES, RUN_PROFILES, POWERS, SYNERGIES, UPGRADES } from './content.js?v=3.9.0';
+import { ENEMY_PORTRAITS } from './art.js?v=3.9.0';
+import { paintPortrait } from './pixel-art.js?v=3.9.0';
+import { vectorElement } from './vector-art.js?v=3.9.0';
+import { formatTime } from './engine.js?v=3.9.0';
+import { $, decorateFrame, drawStats, element, pad, setText, setTier, tierName } from './ui.js?v=3.9.0';
 
 function entry(name, description, marker = '') {
   const row = element('li');
@@ -36,10 +36,14 @@ function buildView(parent, game) {
   parent.append(element('h3', '', profile.name), element('p', 'profile-desc', profile.description), element('p', 'profile-tactic', profile.tactic));
   const hardware = section(parent, 'Weapons / core tuning ' + game.workshop.tunes);
   hardware.classList.add('level-grid');
+  hardware.classList.add('build-weapons');
   for (const [i, mount] of game.armory.mounts.entries()) {
     const row = element('li');
     row.append(element('span', '', mountTitle(mount)),element('b', '', i ? 'Aux ' + i : 'Primary'));
+    row.title = describeMount(mount);
+    setTier(row, GRADE_NAMES[mount.grade - 1]);
     hardware.append(row);
+    if (row.title) hardware.append(element('li', 'weapon-rolls', row.title));
   }
   const relicList = section(parent, 'Installed relics');
   const powers = Object.entries(game.powers).filter(([, rank]) => rank > 0);
@@ -47,7 +51,8 @@ function buildView(parent, game) {
     relicList.append(element('li', 'empty-entry', game.starterReady ? 'A starting relic is ready at the battlefield.' : 'The next draft offers three relics.'));
   }
   for (const [key, rank] of powers) {
-    relicList.append(entry(POWERS[key].name + (rank > 1 ? ' x' + rank : ''), POWERS[key].description));
+    const relic = POWERS[key];
+    relicList.append(entry(relic.name + (rank > 1 ? ' II' : ''), relic.description + (rank > 1 && relic.next ? ' ' + relic.next : '')));
   }
   const synergies = section(parent, 'Relic combinations');
   for (const [key, combo] of Object.entries(SYNERGIES)) {
@@ -57,11 +62,19 @@ function buildView(parent, game) {
     row.classList.toggle('active-combo', active);
     synergies.append(row);
   }
+  for (const [key, combo] of Object.entries(WEAPON_COMBOS)) {
+    const active = game.armory.mounts.some(mount => mount.trait === combo.trait) && Boolean(game.powers[combo.power]);
+    const trait = combo.trait[0].toUpperCase() + combo.trait.slice(1);
+    const row = entry(combo.name, trait + ' weapon + ' + POWERS[combo.power].name + '. ' + combo.description, active ? '[x] ' : '[ ] ');
+    row.classList.toggle('active-combo', active);
+    row.dataset.combo = key;
+    synergies.append(row);
+  }
   const levels = section(parent, 'Tower upgrades');
   levels.classList.add('level-grid');
   for (const [key, upgrade] of Object.entries(UPGRADES)) {
     const row = element('li');
-    row.append(element('span', '', upgrade.label), element('b', '', 'Lv.' + pad(game.levels[key])));
+    row.append(element('span', '', upgrade.label), element('b', '', 'Lv.' + pad(game.levels[key]) + '/' + upgrade.maxLevel));
     levels.append(row);
   }
 }
@@ -216,7 +229,8 @@ export function runPanels(game, { pick, start, refresh, changed }) {
     draftSignature = sig;
     const boss = game.draftReason === 'boss';
     const starter = game.draftReason === 'starter';
-    const reason = cache ? 'SALVAGE CACHE' : boss ? 'SOVEREIGN SALVAGE' : starter ? 'STARTING RELIC' : 'TIMED DRAFT';
+    const bought = game.draftReason === 'bought';
+    const reason = cache ? 'SALVAGE CACHE' : boss ? 'SOVEREIGN SALVAGE' : starter ? 'STARTING RELIC' : bought ? 'BOUGHT DRAFT' : 'TIMED DRAFT';
     setText($('draft-kicker'), reason + '  //  ' + formatTime(game.time));
     const arms = cache && offer.every(item => item.weapon);
     if (arms) setText($('draft-kicker'), 'ARMS CACHE  //  ' + formatTime(game.time));
@@ -233,10 +247,13 @@ export function runPanels(game, { pick, start, refresh, changed }) {
     }
     const cards = keys.map((key, i) => {
       const bp = cache ? describeBlueprint(game,offer[i]) : null;
-      const power = cache ? { ...bp, sigil: bp.icon || UPGRADES[key]?.icon || '  [*]  ', family: bp.rarity } : POWERS[key];
       const rank = cache ? 1 : (game.powers[key] || 0) + 1;
+      const relic = POWERS[key];
+      const power = cache ? { ...bp, sigil: bp.icon || UPGRADES[key]?.icon || '  [*]  ', family: bp.rarity }
+        : rank > 1 && relic.next ? { ...relic, name: relic.name + ' II', description: relic.next } : relic;
       const card = element('button', 'draft-card frame');
-      const family = bp?.curse ? 'CURSED' : bp?.weapon ? bp.role + ' / ' + bp.rarity.toUpperCase() + ' G' + bp.grade : cache ? bp.rarity.toUpperCase() + ' / G' + bp.grade : (power.rarity !== 'common' ? power.rarity.toUpperCase() + ' / ' : '') + power.family.toUpperCase();
+      if (!bp?.curse) setTier(card, cache ? bp.rarity : rank > 1 ? 'rare' : relic.rarity);
+      const family = bp?.curse ? 'CURSED' : bp?.weapon ? bp.role + ' / ' + bp.rarity.toUpperCase() + ' G' + bp.grade : cache ? bp.rarity.toUpperCase() + ' / G' + bp.grade : (rank > 1 && relic.next ? 'RANK II / ' : power.rarity !== 'common' ? power.rarity.toUpperCase() + ' / ' : '') + power.family.toUpperCase();
       const sigil = element('pre', 'power-sigil', power.sigil);
       sigil.setAttribute('aria-hidden', 'true');
       const choose = element('span', 'draft-select', '[ ' + (i + 1) + ' ] Install');
@@ -244,6 +261,7 @@ export function runPanels(game, { pick, start, refresh, changed }) {
       if (bp?.curse) card.classList.add('curse-card');
       card.append(element('span','power-family',family),sigil,element('strong','power-name',power.name),element('span','power-effect',power.description),choose);
       if (cache) card.insertBefore(element('span','blueprint-gain',bp.effect),choose);
+      if (bp?.rolls) card.insertBefore(element('span','weapon-rolls',bp.rolls),choose);
       // Blueprint cards name the combo they complete or advance; relic cards name the combo they open.
       const owned = item => game.powers[item.power] && game.levels[item.upgrade] < item.level;
       const combo = cache
@@ -269,7 +287,7 @@ export function runPanels(game, { pick, start, refresh, changed }) {
         hint.title = traitCombo.description;
         card.insertBefore(hint, choose);
       }
-      if (rank > 1) choose.append(element('small','',' Rank ' + rank));
+      if (rank > 1) choose.append(element('small','',' Upgrade to rank ' + rank));
       card.setAttribute('aria-label', power.name + '. ' + power.description + (cache ? ' ' + bp.effect : '') + ' Press ' + (i + 1) + ' to install.');
       card.addEventListener('click', () => pick(key));
       decorateFrame(card);
@@ -289,7 +307,8 @@ export function runPanels(game, { pick, start, refresh, changed }) {
     const found = mountTitle({ key: pending.weapon, grade: pending.grade, trait: pending.trait });
     setText($('draft-kicker'), 'HARDPOINTS FULL  //  ' + formatTime(game.time));
     setText($('draft-title'), 'Fit ' + found);
-    setText($('draft-prompt'), 'Choose the weapon it replaces, or reclaim it for scrap.');
+    const rolls = describeMount(pending);
+    setText($('draft-prompt'), 'Choose the weapon it replaces, or reclaim it for scrap.' + (rolls ? ' New: ' + rolls + '.' : ''));
     $('cache-actions').hidden = false;
     setText($('cache-wallet'),'SCRAP $' + game.scrap);
     $('cache-reroll').hidden = true;
@@ -300,8 +319,10 @@ export function runPanels(game, { pick, start, refresh, changed }) {
       if (choice.mount) {
         const sigil = element('pre', 'power-sigil', WEAPONS[choice.mount.key].icon);
         sigil.setAttribute('aria-hidden', 'true');
+        setTier(card, GRADE_NAMES[choice.mount.grade - 1]);
         card.append(element('span','power-family',(choice.slot ? 'AUX ' + choice.slot : 'PRIMARY') + ' / FITTED'), sigil,
-          element('strong','power-name',mountTitle(choice.mount)), element('span','power-effect','Swap it for ' + found + '. The reload carries over.'), choose);
+          element('strong','power-name',mountTitle(choice.mount)), element('span','power-effect','Swap it for ' + found + '. The reload carries over.'),
+          element('span','weapon-rolls',describeMount(choice.mount)), choose);
       } else {
         const sigil = element('pre', 'power-sigil', '  ____ \n /___/|\n |___|/');
         sigil.setAttribute('aria-hidden', 'true');

@@ -1,19 +1,19 @@
-import { SPEEDS, SimulationClock } from './clock.js?v=3.8.0';
-import { initAppearance } from './appearance.js?v=3.8.0';
-import { workbench } from './workbench-ui.js?v=3.8.0';
-import { pickBlueprint, fitChoices, workshopCosts } from './workshop.js?v=3.8.0';
-import { maxWeaponRange, mountStats, mountTitle, WEAPON_COMBOS, weaponComboActive } from './weapons.js?v=3.8.0';
-import { Game, formatTime } from './engine.js?v=3.8.0';
-import { ELITE_TRAITS, ROUTES, chooseRoute, CURSES } from './hazards.js?v=3.8.0';
-import { ENEMIES, POWERS, RUN_PROFILES, SYNERGIES, UPGRADES } from './content.js?v=3.8.0';
-import { TITLE, PORTRAIT, ENEMY_PORTRAITS } from './art.js?v=3.8.0';
-import { Field, ART_STYLES } from './field.js?v=3.8.0';
-import { initPixelUI } from './pixel-ui.js?v=3.8.0';
-import { paintPortrait } from './pixel-art.js?v=3.8.0';
-import { fillVectorElement } from './vector-art.js?v=3.8.0';
-import { saveCheckpoint } from './checkpoint.js?v=3.8.0';
-import { runPanels } from './run-panels.js?v=3.8.0';
-import { $, pad, decorateFrame, drawStats, element, setText, tierName } from './ui.js?v=3.8.0';
+import { SPEEDS, SimulationClock } from './clock.js?v=3.9.0';
+import { initAppearance } from './appearance.js?v=3.9.0';
+import { workbench } from './workbench-ui.js?v=3.9.0';
+import { pickBlueprint, fitChoices, workshopCosts } from './workshop.js?v=3.9.0';
+import { maxWeaponRange, mountStats, mountTitle, WEAPON_COMBOS, weaponComboActive } from './weapons.js?v=3.9.0';
+import { Game, formatTime } from './engine.js?v=3.9.0';
+import { ELITE_TRAITS, ROUTES, chooseRoute, CURSES } from './hazards.js?v=3.9.0';
+import { ENEMIES, POWERS, RUN_PROFILES, SYNERGIES, UPGRADES } from './content.js?v=3.9.0';
+import { TITLE, PORTRAIT, ENEMY_PORTRAITS } from './art.js?v=3.9.0';
+import { Field, ART_STYLES } from './field.js?v=3.9.0';
+import { initPixelUI } from './pixel-ui.js?v=3.9.0';
+import { paintPortrait } from './pixel-art.js?v=3.9.0';
+import { fillVectorElement } from './vector-art.js?v=3.9.0';
+import { saveCheckpoint } from './checkpoint.js?v=3.9.0';
+import { runPanels } from './run-panels.js?v=3.9.0';
+import { $, pad, decorateFrame, drawStats, element, setText, tierName, setTier } from './ui.js?v=3.9.0';
 
 const root = document.documentElement;
 function preference(key, fallback) {
@@ -196,7 +196,7 @@ function renderInspector() {
   const flags = enemy && [ELITE_TRAITS[enemy.trait]?.name || '', enemy.shield > 0 ? 'Shield ' + Math.ceil(enemy.shield) : '', enemy.burnUntil > game.time ? 'Burning' : '', enemy.slowUntil > game.time ? 'Slowed' : ''].filter(Boolean);
   const stats = enemy
     ? [['Integrity', Math.ceil(enemy.hp) + '/' + Math.ceil(enemy.maxHp)], ['Impact', enemy.damage + ' HP'], [flags.length ? 'Status' : 'Speed', flags.length ? flags.join(' / ') : concise(enemy.speed) + ' u/s'], ['Bounty', '$' + enemy.reward]]
-    : [['Damage', concise(game.damage) + ' HP'], ['Max reach', concise(maxWeaponRange(game)) + ' u'], ['Main rate', (game.rate * mountStats(game.armory.mounts[0], game).cadence).toFixed(2) + '/s'], ['Splash', game.splash ? concise(game.splash) + ' u' : 'Off']];
+    : [['Damage', concise(game.damage) + ' HP'], ['Max reach', concise(maxWeaponRange(game)) + ' u'], ['Main rate', (game.rate * mountStats(game.armory.mounts[0], game).cadence).toFixed(2) + '/s'], game.barrier >= 1 || game.levels.barrier ? ['Barrier', Math.floor(game.barrier) + ' HP'] : ['Splash', game.splash ? concise(game.splash) + ' u' : 'Off']];
   const signature = [root.dataset.theme, enemy?.id || 'tower', enemy?.tier, game.doctrine, mountTitle(game.armory.mounts[0]), game.focusId, JSON.stringify(stats)].join('/');
   if (signature === inspectedSnapshot) return;
   inspectedSnapshot = signature;
@@ -235,8 +235,10 @@ function renderBuild() {
     return chip;
   }));
   const items = relics.map(key => {
-    const item = element('li', '', POWERS[key].name + (game.powers[key] > 1 ? ' x' + game.powers[key] : ''));
-    item.title = POWERS[key].description;
+    const relic = POWERS[key], ranked = game.powers[key] > 1 && relic.next;
+    const item = element('li', '', relic.name + (ranked ? ' II' : game.powers[key] > 1 ? ' x' + game.powers[key] : ''));
+    item.title = relic.description + (ranked ? ' ' + relic.next : '');
+    setTier(item, ranked ? 'rare' : relic.rarity);
     return item;
   });
   for (const key of game.curses || []) {
