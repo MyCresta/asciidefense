@@ -51,7 +51,7 @@ export const UPGRADES = {
   },
   rate: {
     name: 'Fire rate', label: 'Fire rate', group: 'arsenal',
-    description: '+17% fire rate per level.',
+    description: '+0.15 shots per second per level.',
     icon: '  // //\n // // \n// //  ',
     maxLevel: 16, soft: 10, baseCost: 14, growth: 1.48
   },
@@ -69,7 +69,7 @@ export const UPGRADES = {
   },
   crit: {
     name: 'Critical hit', label: 'Crit chance', group: 'munitions',
-    description: '+7.5% critical chance per level.',
+    description: '+4% critical chance per level.',
     icon: ' \\ ! /\n  [*] \n / ! \\',
     maxLevel: 12, soft: 8, baseCost: 17, growth: 1.53
   },
@@ -99,7 +99,7 @@ export const UPGRADES = {
   },
   lethality: {
     name: 'Lethality', label: 'Crit power', group: 'munitions',
-    description: 'Critical multiplier +0.1x per level. The base is 2x.',
+    description: '+0.1x critical damage per level. The base is 2x.',
     icon: ' \\ | /\n-=[X]=-\n / | \\', after: 240, maxLevel: 8, baseCost: 18, growth: 1.5
   },
   incendiary: {
@@ -109,7 +109,7 @@ export const UPGRADES = {
   },
   chill: {
     name: 'Chill', label: 'Chill', group: 'arsenal',
-    description: 'Direct hits have a 7% chance per level to slow.',
+    description: 'Direct hits slow the target by 3% per level for 2 seconds. Stacks with other slows.',
     icon: ' * | * \n--(*)--\n * | * ', after: 240, maxLevel: 8, baseCost: 16, growth: 1.5
   },
   hunter: {
@@ -278,7 +278,7 @@ export const POWERS = {
   },
   caliper: {
     name: 'Ratchet sight', family: 'Ballistics', rarity: 'common',
-    description: "+8% critical chance.",
+    description: "+5% critical chance.",
     sigil: " o-|-o\n   |\n  [_]", maxStacks: 2
   },
   longshot: {
@@ -393,8 +393,8 @@ export const POWERS = {
   },
   precision: {
     name: 'Loaded dice', family: 'Ballistics', rarity: 'uncommon',
-    description: "+18% critical chance.",
-    downside: "Critical hits deal 1.6x damage instead of 2x.",
+    description: "+10% critical chance.",
+    downside: "-0.25x critical damage.",
     sigil: " .---.\n |o o|\n |.o.|", maxStacks: 1
   },
   returnfire: {
@@ -439,7 +439,7 @@ export const POWERS = {
   },
   deadeye: {
     name: 'Deadeye', family: 'Ballistics', rarity: 'common',
-    description: '+6% critical chance. Critical multiplier +0.15x.',
+    description: '+4% critical chance. +0.1x critical damage.',
     sigil: "  .-.\n-(-o-)-\n  '-'", maxStacks: 2
   },
   quickdraw: {
@@ -519,7 +519,7 @@ export const POWERS = {
   },
   brittle: {
     name: 'Brittle frost', family: 'Control', rarity: 'common',
-    description: '+15% critical chance against slowed hostiles.',
+    description: '+10% critical chance against slowed hostiles.',
     sigil: " *-+-*\n  /*\\\n *-+-*", maxStacks: 1
   },
   anchor: {
@@ -581,6 +581,98 @@ export const POWERS = {
     name: 'Bulkhead', family: 'Defense', rarity: 'rare', rare: true,
     description: 'No single impact deals more than 12% of maximum integrity.',
     sigil: " |===|\n |=+=|\n |===|", maxStacks: 1
+  },
+  // Relics with mechanics of their own, beyond bigger numbers.
+  drone: {
+    name: 'Sentry drone', family: 'Ballistics', rarity: 'uncommon',
+    description: 'A drone circles the Spire and zaps a hostile near it every second for 60% shot damage.',
+    sigil: "  .-.\n-=(o)=-\n  '-'", maxStacks: 2, next: 'Rank II: a second drone circles opposite the first.'
+  },
+  gravity: {
+    name: 'Gravity well', family: 'Control', rarity: 'uncommon',
+    description: 'Every 9 seconds, pull hostiles around the biggest pack in range into a tight knot.',
+    sigil: " \\ | /\n--(@)--\n / | \\", maxStacks: 1
+  },
+  marked: {
+    name: 'Death mark', family: 'Ballistics', rarity: 'uncommon',
+    description: 'Every 6 seconds, mark the healthiest hostile in range. Marked hostiles take 60% more damage and pay 8 scrap.',
+    sigil: "  \\ /\n -(X)-\n  / \\", maxStacks: 1
+  },
+  concuss: {
+    name: 'Concussion shell', family: 'Control', rarity: 'common',
+    description: 'Direct hits knock the target back 3 units, at most once a second per hostile.',
+    sigil: " <<(o)\n   ||\n  _||_", maxStacks: 1
+  },
+  furnace: {
+    name: 'Scrap furnace', family: 'Salvage', rarity: 'uncommon',
+    description: 'Every 20 seconds, burn 10% of your scrap into +1% damage for the rest of the run, up to +40%.',
+    sigil: " |^^^|\n |$$$|\n '==='", maxStacks: 1
+  },
+  trophy: {
+    name: 'Trophy rack', family: 'Ballistics', rarity: 'common',
+    description: '+3% damage for each elite or sovereign you destroy from now on, up to +45%.',
+    sigil: " \\v/ \\v/\n  |===|\n  |   |", maxStacks: 1
+  },
+  secondwind: {
+    name: 'Second wind', family: 'Defense', rarity: 'uncommon',
+    description: 'When integrity falls below 30%, freeze every hostile for 4 seconds. Recharges in 60 seconds.',
+    sigil: "  ~~>\n (( ))\n  <~~", maxStacks: 1
+  },
+  mimic: {
+    name: 'Mimic', family: 'Salvage', rarity: 'rare', rare: true,
+    description: 'Copy your most recent relic that can still stack, adding another rank.',
+    sigil: " .-^-.\n |o o|\n |vvv|", maxStacks: 1
+  },
+  vane: {
+    name: 'Weather vane', family: 'Ballistics', rarity: 'uncommon',
+    description: 'The wind turns every 20 seconds: +30% damage, then +30% fire rate, then +30% range.',
+    sigil: "   N\n W-+->E\n   S", maxStacks: 1
+  },
+  sapper: {
+    name: 'Sapper rounds', family: 'Defense', rarity: 'common',
+    description: 'Hostiles you hit deal 30% less damage to the core for 4 seconds.',
+    sigil: " o==o\n  \\/\n  -o-", maxStacks: 1
+  },
+  mines: {
+    name: 'Minefield', family: 'Ordnance', rarity: 'uncommon',
+    description: 'Every 5 seconds, lay a mine in range, up to 4. A hostile that touches one sets it off for triple shot damage nearby.',
+    sigil: " o   o\n   o\n o   o", maxStacks: 1
+  },
+  sunlance: {
+    name: 'Sun lance', family: 'Ordnance', rarity: 'rare', rare: true,
+    description: 'Every 12 seconds, a beam sweeps through the biggest line of hostiles in range for triple shot damage.',
+    sigil: " \\ | /\n--(O)=====\n / | \\", maxStacks: 1
+  },
+  aura: {
+    name: 'Static field', family: 'Ordnance', rarity: 'common',
+    description: 'Hostiles within 15 units of the Spire take 50% shot damage every second.',
+    sigil: " :::::\n:: @ ::\n :::::", maxStacks: 1
+  },
+  overcharge: {
+    name: 'Overcharger', family: 'Ballistics', rarity: 'uncommon',
+    description: 'Fire 45% faster.',
+    downside: 'Every 10 seconds, all weapons stall for 1.5 seconds.',
+    sigil: " [+++]\n [+++]>\n [---]", maxStacks: 1
+  },
+  scrapshield: {
+    name: 'Scrap plating', family: 'Defense', rarity: 'uncommon',
+    description: 'Half of each core impact is paid in scrap instead, 3 scrap per point, while you can afford it.',
+    sigil: " [$#$]\n [#$#]\n [$#$]", maxStacks: 1
+  },
+  kinetic: {
+    name: 'Steady hands', family: 'Ballistics', rarity: 'common',
+    description: '+5% damage for every 4 seconds without a core impact, up to +40%. An impact resets it.',
+    sigil: "  _|_\n (   )\n  \\_/", maxStacks: 1
+  },
+  shatter: {
+    name: 'Shatter frost', family: 'Control', rarity: 'uncommon',
+    description: 'Hostiles that die while slowed burst into ice, freezing hostiles within 10 units for 1 second.',
+    sigil: " *\\ /*\n  >*<\n */ \\*", maxStacks: 1
+  },
+  linked: {
+    name: 'Fire link', family: 'Ballistics', rarity: 'uncommon',
+    description: "All weapons fire at the primary weapon's target. Aux weapons deal 25% more damage.",
+    sigil: " o--o\n  \\/\n  o", maxStacks: 1
   }
 };
 
@@ -611,7 +703,7 @@ export const SYNERGIES = {
   },
   executioner: {
     name: 'Executioner', power: 'deadeye', upgrade: 'lethality', level: 3,
-    description: 'Critical multiplier +0.25x more.'
+    description: '+0.2x critical damage more.'
   },
   bountyhunter: {
     name: 'Bounty hunter', power: 'warrant', upgrade: 'hunter', level: 3,

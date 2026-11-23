@@ -18,6 +18,7 @@ const rows = [];
 for (const build of [precision, ordnance]) {
   for (let seed = 1; seed <= seeds; seed++) {
     const game = start(seed * 7919);
+    game.openStarter();
     const seen = new Set();
     const at = {};
     let maxedAt = null;

@@ -49,9 +49,9 @@ test('stat relics apply both sides of each trade, add same-kind bonuses and hono
   near(Relics.stat(game, 'splash', 12), 6);
   near(Relics.stat(game, 'chain', 1), 3);
   near(Relics.stat(game, 'armor', 1.5), 7.5);
-  near(Relics.stat(game, 'critChance', .1), .44);
+  near(Relics.stat(game, 'critChance', .1), .3);
   near(Relics.stat(game, 'critChance', .95), 1);
-  near(Relics.criticalMultiplier(game), 1.6);
+  near(Relics.criticalMultiplier(game), 1.75);
   near(Relics.stat(game, 'regen', .2), .2);
   game.hp = 49;
   game.time = 13;
@@ -174,4 +174,29 @@ test('the game applies a drafted relic in the foundry and through the combat loo
   assert(game.fuseUsed);
   assert.equal(game.status, 'running');
   near(game.hp, game.maxHp * .4);
+});
+
+test('relics with mechanics of their own: wind, stalls, marks, sapping and scrap plating', () => {
+  const game = arena({vane:1, overcharge:1, marked:1, sapper:1, scrapshield:1, kinetic:1});
+  game.relicState = { hitAt: 2 };
+  game.time = 5;
+  near(Relics.stat(game, 'damage', 10), 10 * (1 + .3));
+  game.time = 25;
+  near(Relics.stat(game, 'rate', 1), 1 + .45 + .3);
+  near(Relics.stat(game, 'damage', 10), 10 * (1 + .25));
+  game.time = 45;
+  near(Relics.stat(game, 'range', 40), 52);
+  assert.equal(Relics.stalled(game), false);
+  game.time = 49;
+  assert.equal(Relics.stalled(game), true);
+  const target = { ...hostile(20), markUntil: 50 };
+  near(Relics.hitFactor(game, target, true), 1.6);
+  Relics.onStrike(game, target, true);
+  assert.equal(target.sapUntil, 53);
+  game.scrap = 100;
+  assert.equal(Relics.impact(game, target, 20), 7);
+  assert.equal(game.scrap, 79);
+  game.scrap = 5;
+  assert.equal(Relics.impact(game, target, 20), 14);
+  assert.ok(Relics.cooldowns(game).some(item => item.label === 'Stall' && item.active));
 });

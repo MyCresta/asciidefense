@@ -1,9 +1,9 @@
 // Keep lifetime unlocks independent from the current run. Losing a checkpoint
 // (including when browser storage is full) must never reset the player's record.
-import { DOCTRINES, ENEMIES, POWERS, RUN_PROFILES, UPGRADES } from './content.js?v=3.11.0';
-import { WEAPONS, TRAITS, MAX_GRADE } from './weapons.js?v=3.11.0';
-import { createWorkshop, validWorkshop, validRolls, validMods } from './workshop.js?v=3.11.0';
-import { ELITE_TRAITS, CURSES } from './hazards.js?v=3.11.0';
+import { DOCTRINES, ENEMIES, POWERS, RUN_PROFILES, UPGRADES } from './content.js?v=3.12.0';
+import { WEAPONS, TRAITS, MAX_GRADE } from './weapons.js?v=3.12.0';
+import { createWorkshop, validWorkshop, validRolls, validMods } from './workshop.js?v=3.12.0';
+import { ELITE_TRAITS, CURSES } from './hazards.js?v=3.12.0';
 
 const KEY = 'last-spire.checkpoint.v3';
 const LEGACY_KEY = 'last-spire.checkpoint.v2';
@@ -23,7 +23,7 @@ const RUN_FIELDS = [
   'pulseAt', 'wardAt', 'starterReady', 'relics', 'fuseUsed', 'profile',
   'draftHistory', 'workshop', 'armory',
   'stats', 'daily', 'rngState', 'draftReturn',
-  'curses', 'barrier', 'relicState', 'deck'
+  'curses', 'barrier', 'relicState', 'deck', 'rareDraft'
 ];
 const RELIC_STATE = ['streak', 'streakUntil', 'plateUntil', 'hitAt', 'echo'];
 
@@ -75,6 +75,7 @@ function validArmory(armory) {
     if (mount.focus !== undefined && !natural(mount.focus)) return false;
     if (mount.pushAt !== undefined && !number(mount.pushAt)) return false;
     if (mount.lock !== undefined && !(typeof mount.lock === 'string' && mount.lock.length <= 20)) return false;
+    if (mount.beamLock !== undefined && !(typeof mount.beamLock === 'string' && mount.beamLock.length <= 20)) return false;
     keys.add(mount.key);
   }
   return true;
@@ -93,6 +94,9 @@ function validRunExtras(s) {
   if (s.daily !== null && !(typeof s.daily === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.daily))) return false;
   if (!number(s.barrier) || s.barrier < 0 || s.barrier > 1000) return false;
   if (!record(s.relicState) || !numbers(s.relicState, RELIC_STATE)) return false;
+  if (['furnace', 'trophies', 'windAt'].some(key => s.relicState[key] !== undefined && !number(s.relicState[key]))) return false;
+  if (s.relicState.mines !== undefined && !list(s.relicState.mines, 4)) return false;
+  if (typeof s.rareDraft !== 'boolean') return false;
   if (s.deck !== null && !(list(s.deck, 512) && s.deck.every(key => has(POWERS, key)))) return false;
   return Number.isSafeInteger(s.rngState) && s.rngState >= 0 && s.rngState <= 0xFFFFFFFF;
 }
@@ -213,6 +217,7 @@ function addRunExtras(state) {
   }
   if (state.curses === undefined) state = { ...state, curses: [] };
   if (state.draftReturn === undefined) state = { ...state, draftReturn: 'running' };
+  if (state.rareDraft === undefined) state = { ...state, rareDraft: false };
   if (state.stats !== undefined) return state;
   return {
     ...state, daily: null, rngState: 0,
