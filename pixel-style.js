@@ -1,5 +1,5 @@
-import { AsciiStyle, surface } from './ascii-style.js?v=3.12.0';
-import { PIXEL_ENEMIES, pixelSpire, pixelPalette, paintPixels } from './pixel-art.js?v=3.12.0';
+import { AsciiStyle, surface } from './ascii-style.js?v=3.12.1';
+import { PIXEL_ENEMIES, pixelSpire, pixelPalette, paintPixels } from './pixel-art.js?v=3.12.1';
 
 // Each symbol the ASCII style prints becomes a 3x3 block of pixels in the same cell.
 export const GLYPHS = {

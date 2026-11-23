@@ -140,8 +140,8 @@ test('core impacts trigger retaliation and consume a lethal rescue exactly once'
   game.hp -= damage;
   assert.equal(game.hp,40);
   assert.equal(game.fuseUsed,true);
-  damage = Relics.impact(game,game.enemies[0],40);
-  assert.equal(damage,50);
+  damage = Relics.impact(game,game.enemies[0],20);
+  assert.equal(damage,25);
 });
 
 test('the game applies a drafted relic in the foundry and through the combat loop', async () => {
@@ -199,4 +199,12 @@ test('relics with mechanics of their own: wind, stalls, marks, sapping and scrap
   game.scrap = 5;
   assert.equal(Relics.impact(game, target, 20), 14);
   assert.ok(Relics.cooldowns(game).some(item => item.label === 'Stall' && item.active));
+});
+
+test('no single core impact takes more than 35% of maximum integrity, or 12% with Bulkhead', () => {
+  const game = arena({});
+  assert.equal(Relics.impact(game, hostile(1), 80), 35);
+  assert.equal(Relics.impact(game, hostile(1), 20), 20);
+  game.powers.bulkhead = 1;
+  assert.equal(Relics.impact(game, hostile(1), 80), 12);
 });

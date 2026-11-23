@@ -1,4 +1,4 @@
-import { stalled, criticalMultiplier } from './relic-effects.js?v=3.12.0';
+import { stalled, criticalMultiplier } from './relic-effects.js?v=3.12.1';
 
 // Cadence and reach multiply the tower's fire rate and range for each mount.
 export const WEAPONS = {
