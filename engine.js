@@ -1,11 +1,11 @@
-import { ENEMIES, UPGRADES, POWERS, DOCTRINES, BLUEPRINTS, SYNERGIES, RUN_PROFILES } from './content.js?v=3.9.0';
-import { restoreCheckpoint, clearCheckpoint } from './checkpoint.js?v=3.9.0';
+import { ENEMIES, UPGRADES, POWERS, DOCTRINES, BLUEPRINTS, SYNERGIES, RUN_PROFILES } from './content.js?v=3.10.0';
+import { restoreCheckpoint, clearCheckpoint } from './checkpoint.js?v=3.10.0';
 
-import { createWorkshop, awardSalvage, pickBlueprint } from './workshop.js?v=3.9.0';
-import { earnHardpoint, initWeapons, WEAPONS, fireMounts, spreadFire } from './weapons.js?v=3.9.0';
-import * as Relics from './relic-effects.js?v=3.9.0';
-import { applyEliteTrait, rollEliteTrait, cursed, offerRoute, routeActive, routeWeight, tickRoutes } from './hazards.js?v=3.9.0';
-import { applyPerks } from './perks.js?v=3.9.0';
+import { createWorkshop, awardSalvage, pickBlueprint } from './workshop.js?v=3.10.0';
+import { earnHardpoint, initWeapons, WEAPONS, fireMounts, spreadFire } from './weapons.js?v=3.10.0';
+import * as Relics from './relic-effects.js?v=3.10.0';
+import { applyEliteTrait, rollEliteTrait, cursed } from './hazards.js?v=3.10.0';
+import { applyPerks } from './perks.js?v=3.10.0';
 
 export { ENEMIES, UPGRADES, POWERS, DOCTRINES, BLUEPRINTS, SYNERGIES, RUN_PROFILES };
 export const WORLD = Object.freeze({ x: 140, y: 84 });
@@ -195,7 +195,6 @@ export class Game {
     this.draftReturn = 'running';
     this.stats = { dealt: 0, bestHit: 0, taken: {}, fatal: null, trace: [] };
     this.curses = [];
-    this.route = this.path = null;
     this.barrier = 0;
     this.relicState = { streak: 0, streakUntil: 0, plateUntil: 0, hitAt: -1000, echo: 0 };
     this.deck = this.dealDeck();
@@ -414,7 +413,7 @@ export class Game {
 
   spawnContact() {
     const rows = SPAWN_TABLE.filter(row => this.time >= row.at);
-    const weight = row => row.weight * (this.encounter.enemyWeights[row.type] ?? 1) * routeWeight(this, row.type);
+    const weight = row => row.weight * (this.encounter.enemyWeights[row.type] ?? 1);
     let roll = this.random() * rows.reduce((sum, row) => sum + weight(row), 0);
     const { type } = rows.find(row => (roll -= weight(row)) < 0) || rows[rows.length - 1];
     const point = this.entryPoint();
@@ -457,7 +456,6 @@ export class Game {
     this.spawnClock -= dt;
     if (this.spawnClock <= 0) this.spawnContact();
     this.scheduleBoss();
-    tickRoutes(this);
     if (this.daily && this.time >= 30 * (this.stats.trace.length + 1)) this.stats.trace.push(this.kills);
     const threat = 1 + Math.floor(this.time / 45);
     if (threat !== this.threat) {
@@ -655,7 +653,7 @@ export class Game {
   rewardKill(enemy) {
     const base = Math.round(enemy.reward * this.encounter.salvage * (1 + this.bounty)) + (this.powers.harvest || 0);
     const jackpot = this.powers.jackpot && this.random() < (this.powers.jackpot > 1 ? 1 / 6 : .1);
-    const payout = (cursed(this, 'greed') ? 1.5 : 1) * (routeActive(this, 'convoy') ? 1.25 : 1) * (jackpot ? 3 : 1)
+    const payout = (cursed(this, 'greed') ? 1.5 : 1) * (jackpot ? 3 : 1)
       * (this.powers.warrant && (enemy.elite || enemy.boss) ? 2 : 1);
     const bounty = Math.round(Relics.bounty(this, enemy, base) * payout);
     this.scrap += bounty;
@@ -667,7 +665,6 @@ export class Game {
       this.bossKills++;
       earnHardpoint(this);
       this.queue.push('boss');
-      if (!this.route) offerRoute(this);
       this.effect(enemy.x, enemy.y, 'bossfall', 22, 1);
       this.note('Sovereign defeated. Rare relic recovered.', 'boss');
     }

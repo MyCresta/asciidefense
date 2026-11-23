@@ -1,7 +1,7 @@
-import { UPGRADES } from './content.js?v=3.9.0';
-import { cost as relicCost } from './relic-effects.js?v=3.9.0';
-import { CURSES, applyCurse, cursed } from './hazards.js?v=3.9.0';
-import { WEAPONS, MAX_GRADE, GRADE_NAMES, TRAITS, MODS, ROLL_STATS, ROLL_MIN, TEMPER_MAX, availableWeapons, rollWeapon, receiveWeapon, replaceWeapon, forgePrice, mountTitle, setGrade, rollText } from './weapons.js?v=3.9.0';
+import { UPGRADES } from './content.js?v=3.10.0';
+import { cost as relicCost } from './relic-effects.js?v=3.10.0';
+import { CURSES, applyCurse, cursed } from './hazards.js?v=3.10.0';
+import { WEAPONS, MAX_GRADE, GRADE_NAMES, TRAITS, MODS, ROLL_STATS, ROLL_MIN, TEMPER_MAX, availableWeapons, rollWeapon, receiveWeapon, replaceWeapon, forgePrice, mountTitle, setGrade, rollText } from './weapons.js?v=3.10.0';
 
 const GRADES = ['Standard', 'Refined', 'Masterwork'];
 const RESERVES = new Set(['scrap', 'prospect']);
@@ -21,6 +21,8 @@ export function validWorkshop(state, levels, time, status) {
   const counters = ['caches', 'found', 'commissioned', 'tunes', 'repairs', 'opened', 'rerolls', 'dryKills', 'armsCaches', 'weaponDue'];
   if (!counters.every(key => natural(state[key]))) return false;
   if (state.drafts !== undefined && !natural(state.drafts)) return false;
+  if (state.starter !== undefined && typeof state.starter !== 'boolean') return false;
+  if (state.starter && (state.offer.length !== 3 || state.pending !== null || !state.offer.every(validWeaponItem))) return false;
   if (!Number.isFinite(state.lastDrop) || state.lastDrop < -1 || state.lastDrop > time) return false;
   if (state.returnStatus !== 'running' && state.returnStatus !== 'paused') return false;
   if (!Array.isArray(state.offer) || ![0, 3].includes(state.offer.length)) return false;
@@ -28,7 +30,7 @@ export function validWorkshop(state, levels, time, status) {
   if (state.pending !== null && (status !== 'cache' || !validWeaponItem(state.pending))) return false;
   if (status === 'cache' && !state.offer.length) return false;
   if (!state.offer.length) return state.rerolls === 0;
-  if (state.caches < 1 || new Set(state.offer.map(item => item?.key)).size !== 3) return false;
+  if ((state.caches < 1 && !state.starter) || new Set(state.offer.map(item => item?.key)).size !== 3) return false;
   if (state.offer.some(item => item?.weapon !== undefined || item?.curse !== undefined)) {
     return state.offer.every(item => item && (item.weapon !== undefined ? validWeaponItem(item)
       : item.curse !== undefined ? Object.hasOwn(CURSES, item.curse) && item.key === 'curse:' + item.curse : validBlueprint(item, levels)));
@@ -229,7 +231,7 @@ export function describeBlueprint(game, item) {
   const rarity = GRADES[grade - 1];
   if (isCurse(item)) {
     const curse = CURSES[item.curse];
-    return { name: curse.name, grade: 3, rarity: 'Cursed', description: curse.upside + '. ' + curse.downside + '.', effect: 'Lasts all run', curse: true, icon: '  .-.  \n (x x) \n  |=|  ' };
+    return { name: curse.name, grade: 3, rarity: 'Cursed', description: curse.upside + '.', downside: curse.downside + '.', effect: 'Lasts all run', curse: true, icon: '  .-.  \n (x x) \n  |=|  ' };
   }
   if (isWeapon(item)) {
     const gun = WEAPONS[item.weapon], trait = TRAITS[item.trait];
@@ -238,12 +240,13 @@ export function describeBlueprint(game, item) {
     const name = (trait ? trait.name + ' ' : '') + gun.name;
     const maxed = held && held.grade >= MAX_GRADE;
     const tempered = maxed && Object.keys(ROLL_STATS).some(stat => (held.rolls?.[stat] ?? 0) < TEMPER_MAX);
-    const effect = held
+    const effect = game.workshop.starter ? 'Your starting weapon' : held
       ? (maxed ? (tempered ? 'Temper your G' + MAX_GRADE + ': +5% to its weakest roll' : 'Fully tempered. Pick to reclaim +' + salvageValue(game) + ' scrap')
         : 'Reinforce yours to G' + Math.min(MAX_GRADE, Math.max(held.grade + 1, grade)) + ', keeping the best rolls')
       : mounts.length < game.armory.slots ? 'Fits empty hardpoint ' + (mounts.length + 1) : 'Replace a fitted weapon';
     const mods = (item.mods || []).map(key => MODS[key].name).join(', ');
-    return { name, grade, rarity: GRADE_NAMES[grade - 1], description: trait ? trait.description : gun.description,
+    const downside = [trait?.downside, gun.downside].filter(Boolean).join(' ');
+    return { name, grade, rarity: GRADE_NAMES[grade - 1], description: trait ? trait.description : gun.description, downside,
       effect, rolls: rollText(item.rolls) + (mods ? '\nMods: ' + mods : ''), weapon: true, icon: gun.icon, role: gun.role };
   }
   if (key === 'prospect') {
@@ -258,7 +261,9 @@ export function describeBlueprint(game, item) {
   }
   const from = game.levels[key];
   const gain = Math.min(item.levels, upgrade.maxLevel - from);
-  return { name: upgrade.label, grade, rarity, description: upgrade.description, effect: 'Lv.' + from + ' -> ' + (from + gain) + '  /  +' + gain };
+  // Levels past the original cap count for half; say so on the card.
+  const half = upgrade.soft !== undefined && from + gain > upgrade.soft ? '  (half value past Lv.' + upgrade.soft + ')' : '';
+  return { name: upgrade.label, grade, rarity, description: upgrade.description, effect: 'Lv.' + from + ' -> ' + (from + gain) + '  /  +' + gain + half };
 }
 
 export function openCache(game) {
@@ -279,14 +284,32 @@ export function openCache(game) {
   return true;
 }
 
+// Each run starts by picking one of three rolled weapons. The pick cannot be shelved or rerolled.
+export function offerStartingArms(game) {
+  if (game.status !== 'running' || game.time > 0 || game.workshop.offer.length || game.workshop.starter !== undefined) return false;
+  const w = game.workshop;
+  const offer = [];
+  while (offer.length < 3) {
+    const item = rollWeapon(game, offer.map(choice => choice.weapon));
+    if (offer.some(choice => choice.weapon === item.weapon)) continue;
+    offer.push({ ...item, grade: 1, mods: [] });
+  }
+  w.offer = offer;
+  w.starter = true;
+  w.returnStatus = 'running';
+  game.status = 'cache';
+  return true;
+}
+
 export function closeCache(game) {
-  if (game.status !== 'cache') return false;
+  if (game.status !== 'cache' || game.workshop.starter) return false;
   game.status = game.workshop.returnStatus;
   return true;
 }
 
 export function pickBlueprint(game, key) {
   const w = game.workshop;
+  if (game.status === 'cache' && w.starter) return pickStarter(game, key);
   if (game.status !== 'cache' || !w.caches) return false;
   if (w.pending) return fitPending(game, key);
   const item = w.offer.find(choice => choice.key === key);
@@ -319,6 +342,16 @@ export function pickBlueprint(game, key) {
     game.noteSynergies?.(key, from);
   }
   return finishCache(game);
+}
+
+function pickStarter(game, key) {
+  const w = game.workshop;
+  const item = w.offer.find(choice => choice.key === key);
+  if (!item || !replaceWeapon(game, item, 0)) return false;
+  w.offer = [];
+  w.starter = false;
+  game.status = w.returnStatus;
+  return true;
 }
 
 function finishCache(game) {
@@ -369,7 +402,7 @@ export function workshopCosts(game) {
     repair: game.hp < game.maxHp ? price((24 + 9 * w.repairs + 3 * Math.floor(game.time / 50)) * (cursed(game, 'hunger') ? 2 : 1)) : Infinity,
     tune: price(30 + 12 * w.tunes + 1.5 * w.tunes ** 2 + .05 * w.tunes ** 3),
     relic: relicDraftOpen(game) ? price(180 * 1.5 ** (w.drafts || 0) + 2 * Math.floor(game.time / 30)) : Infinity,
-    reroll: game.status === 'cache' && remaining > 3
+    reroll: game.status === 'cache' && remaining > 3 && !w.starter
       ? (game.powers?.broker && w.rerolls === 0 ? 0 : price(14 * 1.9 ** w.rerolls + 2 * Math.floor(game.time / 70))) : Infinity
   };
 }

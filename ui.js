@@ -51,3 +51,16 @@ export function setTier(node, name) {
   const tier = String(rarityTier(name));
   if (node.dataset.tier !== tier) node.dataset.tier = tier;
 }
+
+// Weapon rolls and mod text, with every negative roll marked as a downside.
+export function rollsElement(className, text) {
+  const node = element('span', className);
+  for (const part of String(text).split(/(-\d+% \w+)/)) {
+    if (!part) continue;
+    node.append(/^-\d+% \w+$/.test(part) ? element('span', 'downside', part) : part);
+  }
+  return node;
+}
+
+// The full text of something with a downside, for tooltips.
+export const withDownside = (description, downside) => description + (downside ? ' Downside: ' + downside : '');

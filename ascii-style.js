@@ -1,11 +1,11 @@
-import { TOWER, TOWER_SMALL, ENEMY_ART } from './art.js?v=3.9.0';
-import { ELITE_TRAITS } from './hazards.js?v=3.9.0';
-import { maxWeaponRange } from './weapons.js?v=3.9.0';
+import { TOWER, TOWER_SMALL, ENEMY_ART } from './art.js?v=3.10.0';
+import { ELITE_TRAITS } from './hazards.js?v=3.10.0';
+import { maxWeaponRange } from './weapons.js?v=3.10.0';
 
 export const FONT = '"Lucida Console", "Liberation Mono", "Courier New", monospace';
 const TAU = Math.PI * 2;
 const TOWER_ANCHOR = .5;
-const MOUNT_MARKS = { bolt: '+', scatter: ':', lance: '=', coil: '~', mortar: 'o', cryo: '*' };
+const MOUNT_MARKS = { bolt: '+', scatter: ':', lance: '=', coil: '~', mortar: 'o', cryo: '*', beam: '>', pulse: '^' };
 export const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 
 export function randomSequence(seed) {
@@ -393,6 +393,16 @@ export class AsciiStyle {
           this.mark(pellet === 3 ? '*' : '.', start.x + dx * t + nx * lateral, start.y + dy * t + ny * lateral);
         }
       }
+    } else if (shot.kind === 'beam') {
+      // A solid, steady line: thicker glyphs as the beam locks on.
+      const count = clamp(Math.ceil(length / 3.5), 3, 140);
+      for (let i = 1; i < count; i++) {
+        ctx.globalAlpha = .45 + .5 * life;
+        this.mark(i % 2 ? '=' : '-', start.x + dx * i / count, start.y + dy * i / count);
+      }
+      ctx.globalAlpha = life;
+      ctx.fillStyle = colors.ink;
+      this.mark('+', end.x, end.y);
     } else if (shot.kind === 'lance') {
       // The rail tracer continues a little way through its target.
       const slope = Math.abs(dy / (dx || .01));
@@ -435,7 +445,9 @@ export class AsciiStyle {
       const start = Number.isFinite(shot.fromX) && Number.isFinite(shot.fromY)
         ? this.project(shot.fromX, shot.fromY) : this.mountPoint(slot);
       const end = this.project(shot.x, shot.y);
-      if (shot.kind === 'scatter' || shot.kind === 'lance' || shot.kind === 'coil') {
+      // The pulse ring draws as a ring effect around the Spire, not as a shot.
+      if (shot.kind === 'pulse') continue;
+      if (shot.kind === 'scatter' || shot.kind === 'lance' || shot.kind === 'coil' || shot.kind === 'beam') {
         this.paintMountShot(shot, start, end);
         continue;
       }

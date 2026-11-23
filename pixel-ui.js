@@ -1,5 +1,5 @@
-import { GLYPHS, FALLBACK } from './pixel-style.js?v=3.9.0';
-import { STROKES, DOTS } from './vector-style.js?v=3.9.0';
+import { GLYPHS, FALLBACK } from './pixel-style.js?v=3.10.0';
+import { STROKES, DOTS } from './vector-style.js?v=3.10.0';
 
 // In the pixel and vector styles, ASCII art in the interface (the wordmark and
 // the workshop icons) is redrawn inside the same text box. In pixels each glyph

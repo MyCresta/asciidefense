@@ -1,16 +1,18 @@
-import { WEAPONS, WEAPON_COMBOS, GRADE_NAMES, mountTitle, describeMount } from './weapons.js?v=3.9.0';
-import { PERKS, buyPerk, perkBank, readPerks } from './perks.js?v=3.9.0';
-import { workshopCosts, describeBlueprint, rerollCache, closeCache, fitChoices, cancelFit } from './workshop.js?v=3.9.0';
-import { BLUEPRINTS, ENEMIES, RUN_PROFILES, POWERS, SYNERGIES, UPGRADES } from './content.js?v=3.9.0';
-import { ENEMY_PORTRAITS } from './art.js?v=3.9.0';
-import { paintPortrait } from './pixel-art.js?v=3.9.0';
-import { vectorElement } from './vector-art.js?v=3.9.0';
-import { formatTime } from './engine.js?v=3.9.0';
-import { $, decorateFrame, drawStats, element, pad, setText, setTier, tierName } from './ui.js?v=3.9.0';
+import { WEAPONS, WEAPON_COMBOS, GRADE_NAMES, mountTitle, describeMount } from './weapons.js?v=3.10.0';
+import { PERKS, buyPerk, perkBank, readPerks } from './perks.js?v=3.10.0';
+import { workshopCosts, describeBlueprint, rerollCache, closeCache, fitChoices, cancelFit } from './workshop.js?v=3.10.0';
+import { BLUEPRINTS, ENEMIES, RUN_PROFILES, POWERS, SYNERGIES, UPGRADES } from './content.js?v=3.10.0';
+import { ENEMY_PORTRAITS } from './art.js?v=3.10.0';
+import { paintPortrait } from './pixel-art.js?v=3.10.0';
+import { vectorElement } from './vector-art.js?v=3.10.0';
+import { formatTime } from './engine.js?v=3.10.0';
+import { $, decorateFrame, drawStats, element, pad, rollsElement, setText, setTier, tierName } from './ui.js?v=3.10.0';
 
-function entry(name, description, marker = '') {
+function entry(name, description, marker = '', downside = '') {
   const row = element('li');
-  row.append(element('strong', '', marker + name), element('small', '', description));
+  const detail = element('small', '', description);
+  if (downside) detail.append(' ', element('span', 'downside', downside));
+  row.append(element('strong', '', marker + name), detail);
   return row;
 }
 
@@ -43,7 +45,11 @@ function buildView(parent, game) {
     row.title = describeMount(mount);
     setTier(row, GRADE_NAMES[mount.grade - 1]);
     hardware.append(row);
-    if (row.title) hardware.append(element('li', 'weapon-rolls', row.title));
+    if (row.title) {
+      const rolls = element('li', 'weapon-rolls');
+      rolls.append(rollsElement('', row.title));
+      hardware.append(rolls);
+    }
   }
   const relicList = section(parent, 'Installed relics');
   const powers = Object.entries(game.powers).filter(([, rank]) => rank > 0);
@@ -52,7 +58,7 @@ function buildView(parent, game) {
   }
   for (const [key, rank] of powers) {
     const relic = POWERS[key];
-    relicList.append(entry(relic.name + (rank > 1 ? ' II' : ''), relic.description + (rank > 1 && relic.next ? ' ' + relic.next : '')));
+    relicList.append(entry(relic.name + (rank > 1 ? ' II' : ''), relic.description + (rank > 1 && relic.next ? ' ' + relic.next : ''), '', relic.downside));
   }
   const synergies = section(parent, 'Relic combinations');
   for (const [key, combo] of Object.entries(SYNERGIES)) {
@@ -233,12 +239,14 @@ export function runPanels(game, { pick, start, refresh, changed }) {
     const reason = cache ? 'SALVAGE CACHE' : boss ? 'SOVEREIGN SALVAGE' : starter ? 'STARTING RELIC' : bought ? 'BOUGHT DRAFT' : 'TIMED DRAFT';
     setText($('draft-kicker'), reason + '  //  ' + formatTime(game.time));
     const arms = cache && offer.every(item => item.weapon);
-    if (arms) setText($('draft-kicker'), 'ARMS CACHE  //  ' + formatTime(game.time));
-    setText($('draft-title'), arms ? 'Choose a weapon' : cache && offer.some(item => item.weapon) ? 'Choose a blueprint or weapon' : cache ? 'Choose a blueprint' : starter ? 'Choose your first relic' : 'Choose a relic');
-    setText($('draft-prompt'), arms ? 'Fit one found weapon to your hardpoints.' : cache ? 'Pick one.' : boss ? 'The Sovereign fell. Recover one effect for this run.' : 'Install one effect for this run.');
+    const opening = cache && game.workshop.starter;
+    if (arms) setText($('draft-kicker'), (opening ? 'STARTING WEAPON' : 'ARMS CACHE') + '  //  ' + formatTime(game.time));
+    setText($('draft-title'), opening ? 'Choose your weapon' : arms ? 'Choose a weapon' : cache && offer.some(item => item.weapon) ? 'Choose a blueprint or weapon' : cache ? 'Choose a blueprint' : starter ? 'Choose your first relic' : 'Choose a relic');
+    setText($('draft-prompt'), opening ? 'Each one rolled its own stats and trait for this run.' : arms ? 'Fit one found weapon to your hardpoints.' : cache ? 'Pick one.' : boss ? 'The Sovereign fell. Recover one effect for this run.' : 'Install one effect for this run.');
     $('cache-actions').hidden = !cache;
     setText($('cache-shelve'), '[ Save for later ]');
-    $('cache-reroll').hidden = false;
+    $('cache-shelve').hidden = opening;
+    $('cache-reroll').hidden = opening;
     if (cache) {
       const cost = workshopCosts(game).reroll;
       setText($('cache-wallet'),'SCRAP $' + game.scrap);
@@ -259,9 +267,12 @@ export function runPanels(game, { pick, start, refresh, changed }) {
       const choose = element('span', 'draft-select', '[ ' + (i + 1) + ' ] Install');
       if (bp?.weapon) card.classList.add('weapon-card');
       if (bp?.curse) card.classList.add('curse-card');
-      card.append(element('span','power-family',family),sigil,element('strong','power-name',power.name),element('span','power-effect',power.description),choose);
+      const effect = element('span','power-effect',power.description);
+      // Downsides are always spelled out on their own line, in the warning colour.
+      if (power.downside) effect.append(element('span','power-downside',power.downside));
+      card.append(element('span','power-family',family),sigil,element('strong','power-name',power.name),effect,choose);
       if (cache) card.insertBefore(element('span','blueprint-gain',bp.effect),choose);
-      if (bp?.rolls) card.insertBefore(element('span','weapon-rolls',bp.rolls),choose);
+      if (bp?.rolls) card.insertBefore(rollsElement('weapon-rolls',bp.rolls),choose);
       // Blueprint cards name the combo they complete or advance; relic cards name the combo they open.
       const owned = item => game.powers[item.power] && game.levels[item.upgrade] < item.level;
       const combo = cache
@@ -288,7 +299,7 @@ export function runPanels(game, { pick, start, refresh, changed }) {
         card.insertBefore(hint, choose);
       }
       if (rank > 1) choose.append(element('small','',' Upgrade to rank ' + rank));
-      card.setAttribute('aria-label', power.name + '. ' + power.description + (cache ? ' ' + bp.effect : '') + ' Press ' + (i + 1) + ' to install.');
+      card.setAttribute('aria-label', power.name + '. ' + power.description + (power.downside ? ' Downside: ' + power.downside : '') + (cache ? ' ' + bp.effect : '') + ' Press ' + (i + 1) + ' to install.');
       card.addEventListener('click', () => pick(key));
       decorateFrame(card);
       return card;
@@ -313,6 +324,7 @@ export function runPanels(game, { pick, start, refresh, changed }) {
     setText($('cache-wallet'),'SCRAP $' + game.scrap);
     $('cache-reroll').hidden = true;
     setText($('cache-shelve'), '[ Back ]');
+    $('cache-shelve').hidden = false;
     const cards = choices.map((choice, i) => {
       const card = element('button', 'draft-card frame fit-card');
       const choose = element('span', 'draft-select', '[ ' + (i + 1) + ' ] ' + (choice.mount ? 'Replace' : 'Reclaim'));
@@ -322,7 +334,7 @@ export function runPanels(game, { pick, start, refresh, changed }) {
         setTier(card, GRADE_NAMES[choice.mount.grade - 1]);
         card.append(element('span','power-family',(choice.slot ? 'AUX ' + choice.slot : 'PRIMARY') + ' / FITTED'), sigil,
           element('strong','power-name',mountTitle(choice.mount)), element('span','power-effect','Swap it for ' + found + '. The reload carries over.'),
-          element('span','weapon-rolls',describeMount(choice.mount)), choose);
+          rollsElement('weapon-rolls',describeMount(choice.mount)), choose);
       } else {
         const sigil = element('pre', 'power-sigil', '  ____ \n /___/|\n |___|/');
         sigil.setAttribute('aria-hidden', 'true');

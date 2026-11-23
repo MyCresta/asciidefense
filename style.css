@@ -462,7 +462,7 @@ div.hardpoint-row .cost { color:var(--ink); }
   .speed-button { min-height:24px; min-width:28px; }
 }
 
-/* Timeline, routes and the run summary */
+/* Timeline and the run summary */
 .timeline { margin-left:auto; color:var(--muted); font-size:.68rem; white-space:pre; letter-spacing:0; overflow:hidden; }
 .timeline b { color:var(--accent); font-weight:700; }
 .timeline + .live { margin-left:12px; }
@@ -487,18 +487,12 @@ div.hardpoint-row .cost { color:var(--ink); }
 .perk b { grid-row:1 / span 2; grid-column:2; align-self:center; color:var(--accent); font-size:.72rem; }
 .perk:disabled b { color:var(--muted); }
 .perk:not(:disabled):hover,.perk:not(:disabled):focus-visible { background:var(--wash); }
-.route { position:absolute; z-index:2; top:6px; right:10px; width:min(260px,70%); padding:9px 11px; display:flex; flex-direction:column; gap:5px; background:var(--bg); border:1px dashed var(--line); font-size:.7rem; }
-.route-option { display:grid; grid-template-columns:auto minmax(0,1fr); gap:0 8px; text-align:left; padding:3px 0; }
-.route-option b { color:var(--accent); grid-row:1 / span 2; }
-.route-option span { color:var(--ink); }
-.route-option small { color:var(--muted); }
-.route-option:hover span,.route-option:focus-visible span { color:var(--accent); }
 .tip { position:absolute; z-index:2; left:50%; bottom:34px; transform:translateX(-50%); max-width:92%; padding:5px 10px; background:var(--bg); border:1px dashed var(--line); font-size:.72rem; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:flex; gap:10px; align-items:center; }
 .tip b { color:var(--accent); }
 .tip button { color:var(--muted); font-size:.68rem; }
 .tip button:hover { color:var(--accent); }
 .race { margin-left:8px; }
-@media (max-width:700px) { .route { top:auto; bottom:28px; right:4px; width:min(240px,80%); } .tip { bottom:26px; font-size:.64rem; } }
+@media (max-width:700px) { .tip { bottom:26px; font-size:.64rem; } }
 
 /* Rarity colours: plain, green, blue, violet, gold. Mixed with the theme ink so every theme keeps contrast. */
 :root {
@@ -507,6 +501,7 @@ div.hardpoint-row .cost { color:var(--ink); }
   --tier-3: color-mix(in oklab, #5aa9ff 68%, var(--ink));
   --tier-4: color-mix(in oklab, #c27dff 68%, var(--ink));
   --tier-5: color-mix(in oklab, #ffb238 72%, var(--ink));
+  --bad: color-mix(in oklab, #ff5d5d 74%, var(--ink));
 }
 [data-tier="2"] { --tier: var(--tier-2); } [data-tier="3"] { --tier: var(--tier-3); }
 [data-tier="4"] { --tier: var(--tier-4); } [data-tier="5"] { --tier: var(--tier-5); }
@@ -519,3 +514,7 @@ div.hardpoint-row .cost { color:var(--ink); }
 .weapon-rolls { color: var(--muted); font-size: .62rem; letter-spacing: .03em; line-height: 1.45; margin: 0 0 12px; white-space: pre-line; }
 @media (max-width:700px) { .weapon-rolls { grid-column: 2; margin: 0 0 4px; } }
 .build-weapons + .dossier-list .weapon-rolls, .dossier-list .weapon-rolls { display: block; margin: -2px 0 6px; }
+
+/* Downsides read in a warning red on every card, roll line and build entry. */
+.power-downside { display: block; margin-top: 4px; color: var(--bad); }
+.downside { color: var(--bad); }

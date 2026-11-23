@@ -18,17 +18,27 @@ export const WEAPONS = {
   coil: {
     name: 'Arc coil', role: 'CHAIN FIRE', scale: .75, cadence: .96, reach: .95,
     icon: '  ~\\   \n--((o))\n    /~ ',
-    description: 'Jumps to two extra enemies. Arc upgrades count double. No blast.'
+    description: 'Jumps to two extra enemies. Arc upgrades count double.', downside: 'No blast.'
   },
   mortar: {
     name: 'Flak mortar', role: 'AREA DENIAL', scale: 1.25, cadence: .62, reach: 1.1, unlock: 120,
     icon: '   _   \n  (_)  \n==/ \\==',
-    description: 'Shells burst on impact. Blast upgrades count double. No arcs.'
+    description: 'Shells burst on impact. Blast upgrades count double.', downside: 'No arcs.'
   },
   cryo: {
     name: 'Cryo projector', role: 'CONTROL', scale: .7, cadence: 1.05, reach: .9, unlock: 450,
     icon: '  \\|/  \n--=*=--\n  /|\\  ',
     description: 'Freezing bolts slow the target and anything standing next to it.'
+  },
+  beam: {
+    name: 'Ion beam', role: 'FOCUS', scale: .3, cadence: 3.2, reach: .92, unlock: 250,
+    icon: ' .-.   \n(( ))==\n \'-\'   ',
+    description: 'A steady beam that grows stronger the longer it holds one target, up to +120%.', downside: 'No arcs. Half blast. Starts over on a new target.'
+  },
+  pulse: {
+    name: 'Pulse ring', role: 'SHOCKWAVE', scale: 1, cadence: .55, reach: .62, unlock: 600,
+    icon: ' ( . ) \n( (o) )\n ( . ) ',
+    description: 'Hits every hostile close to the Spire at once. Every 3 seconds it also knocks them back.', downside: 'Short reach. No arcs or blast.'
   }
 };
 
@@ -53,8 +63,13 @@ export const ROLL_STATS = { power: 'dmg', cadence: 'rate', reach: 'reach' };
 export const ROLE_RULES = {
   bolt: { crit: .12, critPower: 1.25 },
   coil: { chain: 2, splash: 0 },
-  mortar: { chain: 0, splash: 2 }
+  mortar: { chain: 0, splash: 2 },
+  beam: { chain: 0, splash: .35 },
+  pulse: { chain: 0, splash: 0 }
 };
+// The ion beam ramps by 12% per consecutive hit on the same target.
+export const BEAM_RAMP = .12, BEAM_MAX = 1.2;
+export const PULSE_PUSH = 5, PULSE_PUSH_EVERY = 3;
 
 // Extra hardpoints are earned by defeating sovereigns, never bought.
 export const HARDPOINT_BOSSES = [0, 1, 3];
@@ -76,7 +91,7 @@ export function forgePrice(mount) {
 export const TRAITS = {
   rapid: { name: 'Rapid', description: '+20% fire rate.', cadence: 1.2 },
   long: { name: 'Long', description: '+15% reach.', reach: 1.15 },
-  heavy: { name: 'Heavy', description: '+35% damage, -15% fire rate.', scale: 1.35, cadence: .85 },
+  heavy: { name: 'Heavy', description: '+35% damage.', downside: '-15% fire rate.', scale: 1.35, cadence: .85 },
   searing: { name: 'Searing', description: 'Hits set the target burning.', burn: .5 },
   forked: { name: 'Forked', description: 'Each hit chains to one more enemy.', chains: 1 },
   keen: { name: 'Keen', description: '+10% critical chance.', crit: .1 },
@@ -109,10 +124,10 @@ export const WEAPON_COMBOS = {
   stormcell: { name: 'Storm cell', trait: 'forked', power: 'tesla', description: 'Forked weapons chain twice more.' },
   hairtrigger: { name: 'Hair trigger', trait: 'rapid', power: 'overclock', description: 'Rapid weapons fire 15% faster again.' },
   glacier: { name: 'Glacier', trait: 'chilling', power: 'frost', description: 'Chilling weapons freeze targets for 1 second.' },
-  manhunt: { name: 'Manhunt', trait: 'hunting', power: 'headhunter', description: 'Hunting weapons deal +30% more to elites and sovereigns.' },
+  manhunt: { name: 'Manhunt', trait: 'hunting', power: 'headhunter', description: 'Hunting weapons deal another +30% to elites and sovereigns.' },
   chainfire: { name: 'Chain fire', trait: 'volatile', power: 'bloom', description: 'Volatile bursts are twice as wide.' },
   overload: { name: 'Overload', trait: 'capacitor', power: 'overclock', description: 'Capacitor weapons charge every 3rd shot.' },
-  assassin: { name: 'Assassin', trait: 'keen', power: 'precision', description: 'Keen weapons gain 10% more critical chance.' }
+  assassin: { name: 'Assassin', trait: 'keen', power: 'precision', description: 'Keen weapons get another +10% critical chance.' }
 };
 
 export function weaponComboActive(game, key) {
@@ -316,6 +331,15 @@ function burstAround(game, center, damage, radius) {
   }
 }
 
+// Push a hostile straight away from the Spire, keeping it on the field.
+function shove(enemy, units) {
+  const gap = Math.hypot(enemy.x, enemy.y);
+  if (gap <= 0) return;
+  const factor = (gap + units) / gap;
+  enemy.x = Math.max(-139, Math.min(139, enemy.x * factor));
+  enemy.y = Math.max(-83, Math.min(83, enemy.y * factor));
+}
+
 function fireMount(game, mount, slot, stats, target, reach, bonus = 1) {
   let scale = stats.scale * MOUNT_OUTPUT[slot] * bonus;
   if (stats.charge) {
@@ -325,6 +349,11 @@ function fireMount(game, mount, slot, stats, target, reach, bonus = 1) {
   if (slot === 0 && game.powers?.echo && game.relicState) {
     game.relicState.echo = ((game.relicState.echo || 0) + 1) % 4;
     if (game.relicState.echo === 0) scale *= 2;
+  }
+  if (mount.key === 'beam') {
+    mount.focus = mount.lock === target.id ? Math.min(Math.round(BEAM_MAX / BEAM_RAMP), (mount.focus || 0) + 1) : 0;
+    mount.lock = target.id;
+    scale *= 1 + BEAM_RAMP * mount.focus;
   }
   if (stats.hunter && (target.elite || target.boss)) scale *= 1 + stats.hunter;
   if (stats.shred && (target.shield > 0 || target.trait === 'plated' || target.type === 'brute')) scale *= 1 + stats.shred;
@@ -351,6 +380,17 @@ function fireMount(game, mount, slot, stats, target, reach, bonus = 1) {
     game.effect(target.x, target.y, 'splash', 9);
     for (const enemy of game.enemies) {
       if (enemy !== target && enemy.hp > 0 && Math.hypot(enemy.x - target.x, enemy.y - target.y) <= 9) game.strike(enemy, hit * .7, false);
+    }
+  }
+  if (mount.key === 'pulse') {
+    game.effect(0, 0, 'pulse', reach, .45);
+    // The knockback has its own timer, so a fast pulse cannot pin hostiles in place.
+    const push = game.time >= (mount.pushAt || 0);
+    if (push) mount.pushAt = game.time + PULSE_PUSH_EVERY;
+    for (const enemy of game.enemies) {
+      if (enemy.hp <= 0 || Math.hypot(enemy.x, enemy.y) > reach) continue;
+      if (enemy !== target) game.strike(enemy, hit, true);
+      if (push) shove(enemy, enemy.boss ? PULSE_PUSH * .4 : PULSE_PUSH);
     }
   }
   if (mount.key === 'cryo') {

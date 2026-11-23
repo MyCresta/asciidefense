@@ -1,9 +1,9 @@
 // Keep lifetime unlocks independent from the current run. Losing a checkpoint
 // (including when browser storage is full) must never reset the player's record.
-import { DOCTRINES, ENEMIES, POWERS, RUN_PROFILES, UPGRADES } from './content.js?v=3.9.0';
-import { WEAPONS, TRAITS, MAX_GRADE } from './weapons.js?v=3.9.0';
-import { createWorkshop, validWorkshop, validRolls, validMods } from './workshop.js?v=3.9.0';
-import { ELITE_TRAITS, CURSES, ROUTES } from './hazards.js?v=3.9.0';
+import { DOCTRINES, ENEMIES, POWERS, RUN_PROFILES, UPGRADES } from './content.js?v=3.10.0';
+import { WEAPONS, TRAITS, MAX_GRADE } from './weapons.js?v=3.10.0';
+import { createWorkshop, validWorkshop, validRolls, validMods } from './workshop.js?v=3.10.0';
+import { ELITE_TRAITS, CURSES } from './hazards.js?v=3.10.0';
 
 const KEY = 'last-spire.checkpoint.v3';
 const LEGACY_KEY = 'last-spire.checkpoint.v2';
@@ -23,7 +23,7 @@ const RUN_FIELDS = [
   'pulseAt', 'wardAt', 'starterReady', 'relics', 'fuseUsed', 'profile',
   'draftHistory', 'workshop', 'armory',
   'stats', 'daily', 'rngState', 'draftReturn',
-  'curses', 'route', 'path', 'barrier', 'relicState', 'deck'
+  'curses', 'barrier', 'relicState', 'deck'
 ];
 const RELIC_STATE = ['streak', 'streakUntil', 'plateUntil', 'hitAt', 'echo'];
 
@@ -72,6 +72,9 @@ function validArmory(armory) {
     if (!Number.isInteger(mount.grade) || mount.grade < 1 || mount.grade > MAX_GRADE) return false;
     if (mount.trait !== null && !has(TRAITS, mount.trait)) return false;
     if (!validRolls(mount.rolls) || !validMods(mount.mods) || (mount.shots !== undefined && !natural(mount.shots))) return false;
+    if (mount.focus !== undefined && !natural(mount.focus)) return false;
+    if (mount.pushAt !== undefined && !number(mount.pushAt)) return false;
+    if (mount.lock !== undefined && !(typeof mount.lock === 'string' && mount.lock.length <= 20)) return false;
     keys.add(mount.key);
   }
   return true;
@@ -86,9 +89,7 @@ function validRunExtras(s) {
   if (stats.fatal !== null) return false;
   if (stats.trace !== undefined && !(list(stats.trace, 4000) && stats.trace.every(natural))) return false;
   if (!list(s.curses, 8) || !s.curses.every(key => has(CURSES, key)) || new Set(s.curses).size !== s.curses.length) return false;
-  if (s.route !== null && !(record(s.route) && number(s.route.expires) && list(s.route.options, 2)
-    && s.route.options.length === 2 && s.route.options.every(key => has(ROUTES, key)))) return false;
-  if (s.path !== null && !(record(s.path) && has(ROUTES, s.path.key) && number(s.path.until))) return false;
+  // Saves from before routes were removed may still carry route and path fields; they are ignored.
   if (s.daily !== null && !(typeof s.daily === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.daily))) return false;
   if (!number(s.barrier) || s.barrier < 0 || s.barrier > 1000) return false;
   if (!record(s.relicState) || !numbers(s.relicState, RELIC_STATE)) return false;
@@ -210,7 +211,7 @@ function addRunExtras(state) {
     if (record(levels)) for (const key of Object.keys(UPGRADES)) if (levels[key] === undefined) levels[key] = 0;
     state = { ...state, levels, barrier: 0, deck: null, relicState: { streak: 0, streakUntil: 0, plateUntil: 0, hitAt: -1000, echo: 0 } };
   }
-  if (state.curses === undefined) state = { ...state, curses: [], route: null, path: null };
+  if (state.curses === undefined) state = { ...state, curses: [] };
   if (state.draftReturn === undefined) state = { ...state, draftReturn: 'running' };
   if (state.stats !== undefined) return state;
   return {

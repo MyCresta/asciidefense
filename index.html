@@ -7,11 +7,11 @@
   <meta name="description" content="Defend the Last Spire in an endless, all-ASCII tower defense roguelike.">
   <title>Last Spire | ASCII Tower Defense</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="./style.css?v=3.9.0">
-  <link rel="stylesheet" href="./appearance.css?v=3.9.0">
-  <link rel="stylesheet" href="./art-styles.css?v=3.9.0">
+  <link rel="stylesheet" href="./style.css?v=3.10.0">
+  <link rel="stylesheet" href="./appearance.css?v=3.10.0">
+  <link rel="stylesheet" href="./art-styles.css?v=3.10.0">
   <link rel="preload" href="./fonts/pixelify-sans.woff2" as="font" type="font/woff2" crossorigin>
-  <script type="module" src="./main.js?v=3.9.0"></script>
+  <script type="module" src="./main.js?v=3.10.0"></script>
 </head>
 <body>
   <main class="console">
@@ -46,11 +46,6 @@
         <div class="arena">
           <canvas id="field" tabindex="0" aria-label="Battlefield. Use arrow keys to cycle targets and Enter to inspect. Click or tap a unit to inspect it.">The Last Spire battlefield</canvas>
           <div id="siege-alert" class="siege-alert" hidden></div>
-          <div id="route" class="route" role="group" aria-label="Choose a route" hidden>
-            <div class="panel-head"><span class="eyebrow">CHOOSE A ROUTE</span><span id="route-clock"></span></div>
-            <button id="route-0" class="route-option"></button>
-            <button id="route-1" class="route-option"></button>
-          </div>
           <div id="tip" class="tip" role="status" hidden><span><b>TIP</b> <span id="tip-text"></span></span><button id="tip-close" aria-label="Turn off tips">[x]</button></div>
           <div class="field-coords" aria-hidden="true">X <span id="coord-x">+000</span> &nbsp; Y <span id="coord-y">+000</span></div>
           <div class="field-toggles"><button id="numbers-toggle" aria-pressed="true">[x] Numbers</button><button id="range-toggle" aria-pressed="true">[x] Range</button></div>
