@@ -4,7 +4,7 @@ import { workbench } from './workbench-ui.js?v=3.10.0';
 import { pickBlueprint, fitChoices, workshopCosts, offerStartingArms } from './workshop.js?v=3.10.0';
 import { maxWeaponRange, mountStats, mountTitle, WEAPON_COMBOS, weaponComboActive } from './weapons.js?v=3.10.0';
 import { Game, formatTime } from './engine.js?v=3.10.0';
-import { ELITE_TRAITS, ROUTES, chooseRoute, CURSES } from './hazards.js?v=3.10.0';
+import { ELITE_TRAITS, CURSES } from './hazards.js?v=3.10.0';
 import { ENEMIES, POWERS, RUN_PROFILES, SYNERGIES, UPGRADES } from './content.js?v=3.10.0';
 import { TITLE, PORTRAIT, ENEMY_PORTRAITS } from './art.js?v=3.10.0';
 import { Field, ART_STYLES } from './field.js?v=3.10.0';
@@ -293,31 +293,13 @@ function updateSiege() {
     setText(banner, '[!] SIEGE FROM ' + String(game.warning.edge).toUpperCase() + '  /  ' + secs + 's');
   }
 }
-function updateRoute() {
-  const box = $('route');
-  box.hidden = !game.route || game.status === 'over';
-  if (box.hidden) return;
-  setText($('route-clock'), Math.max(0, Math.ceil(game.route.expires - game.time)) + 's');
-  game.route.options.forEach((key, i) => {
-    const button = $('route-' + i), route = ROUTES[key];
-    if (button.dataset.key === key) return;
-    button.dataset.key = key;
-    button.replaceChildren(element('b', '', '[' + (i + 1) + ']'), element('span', '', route.name), element('small', '', route.foes + '. ' + route.reward + '.'));
-  });
-}
-function pickRoute(i) {
-  if (chooseRoute(game, i)) commitAction();
-}
-$('route-0').addEventListener('click', () => pickRoute(0));
-$('route-1').addEventListener('click', () => pickRoute(1));
 
 // One-time tips for new players, each shown once and all switchable off.
 const TIPS = [
   ['focus', () => game.time > 2, 'Click an enemy to focus fire on it.'],
   ['pause', () => game.time > 25, 'Space pauses and resumes.'],
   ['cache', () => game.workshop.caches > 0 && game.time > 8, 'Press C to open a big cache.'],
-  ['forge', () => game.scrap >= workshopCosts(game).forge[0], 'Click a weapon to forge it a grade higher.'],
-  ['route', () => Boolean(game.route), 'Press 1 or 2 to choose a route.']
+  ['forge', () => game.scrap >= workshopCosts(game).forge[0], 'Click a weapon to forge it a grade higher.']
 ];
 let tipsSeen = new Set(preference('tips', '').split(',').filter(Boolean));
 let tipShown = null, tipUntil = 0;
@@ -446,7 +428,7 @@ function renderHud() {
     setText($('field-profile'),'/ ' + profile.name);
     $('field-profile').title = profile.description + ' ' + profile.tactic;
   }
-  shop.render(); updateRack(); updateSiege(); updateRoute(); updateTimeline(); updateTip(); soundLog();
+  shop.render(); updateRack(); updateSiege(); updateTimeline(); updateTip(); soundLog();
   const coord = value => (value < 0 ? '-' : '+') + pad(Math.min(999,Math.abs(Math.round(value || 0))),3);
   setText($('coord-x'),coord(field.pointer?.x));
   setText($('coord-y'),coord(field.pointer?.y));
@@ -547,7 +529,6 @@ document.addEventListener('keydown', event => {
     togglePlay();
     return;
   }
-  if (game.route && (event.key === '1' || event.key === '2')) { event.preventDefault(); pickRoute(Number(event.key) - 1); return; }
   if (event.key.toLowerCase() === 'c') { event.preventDefault(); shop.open(); }
   if (event.key === 'Escape' && game.status !== 'over') { event.preventDefault(); togglePlay(); }
 });

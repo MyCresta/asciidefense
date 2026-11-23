@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { saveCheckpoint } from '../checkpoint.js';
-import { CURSES, applyCurse, chooseRoute, offerRoute } from '../hazards.js';
+import { CURSES, applyCurse } from '../hazards.js';
 import { PERKS, buyPerk, perkBank } from '../perks.js';
 import { mountStats, weaponComboActive } from '../weapons.js';
 import { openCache, pickBlueprint, workshopCosts } from '../workshop.js';
@@ -49,27 +49,13 @@ test('perks cost lifetime kills once and apply to normal runs but not the daily'
   assert.equal(game.workshop.caches, 1);
 });
 
-test('a route is offered after a sovereign falls and pays out when it ends', () => {
+test('a fallen sovereign no longer offers a route choice', () => {
   const game = quiet(3);
   const boss = game.spawn('sovereign', 20, 0);
   boss.hp = 0;
   game.resolveContacts();
-  assert.ok(game.route && game.route.options.length === 2 && game.route.options[0] !== game.route.options[1]);
-  game.status = 'running';
-  game.route.options = ['swarm', 'convoy'];
-  const caches = game.workshop.caches;
-  assert.equal(chooseRoute(game, 0), true);
-  assert.equal(game.path.key, 'swarm');
-  game.queue = [];
-  game.nextDraft = 1e6;
-  game.update(151);
-  assert.equal(game.path, null);
-  assert.equal(game.workshop.caches, caches + 1);
-
-  const late = quiet(4);
-  offerRoute(late);
-  late.update(21);
-  assert.ok(late.path, 'An unanswered route takes the first option');
+  assert.equal(game.route, undefined);
+  assert.deepEqual(game.queue, ['boss']);
 });
 
 test('cursed cards trade a lasting upside for a lasting downside', () => {
