@@ -1,7 +1,9 @@
-import { UPGRADES } from './content.js?v=3.10.0';
-import { cost as relicCost } from './relic-effects.js?v=3.10.0';
-import { CURSES, applyCurse, cursed } from './hazards.js?v=3.10.0';
-import { WEAPONS, MAX_GRADE, GRADE_NAMES, TRAITS, MODS, ROLL_STATS, ROLL_MIN, TEMPER_MAX, availableWeapons, rollWeapon, receiveWeapon, replaceWeapon, forgePrice, mountTitle, setGrade, rollText } from './weapons.js?v=3.10.0';
+import { UPGRADES } from './content.js?v=3.11.0';
+import { cost as relicCost } from './relic-effects.js?v=3.11.0';
+import { CURSES, applyCurse, cursed } from './hazards.js?v=3.11.0';
+import { WEAPONS, MAX_GRADE, GRADE_NAMES, TRAITS, MODS, ROLL_STATS, ROLL_MIN, TEMPER_MAX, availableWeapons, rollWeapon, receiveWeapon, replaceWeapon, forgePrice, mountTitle, setGrade, rollText } from './weapons.js?v=3.11.0';
+
+export const CURSE_ICON = '  .-.  \n (x x) \n  |=|  ';
 
 const GRADES = ['Standard', 'Refined', 'Masterwork'];
 const RESERVES = new Set(['scrap', 'prospect']);
@@ -231,7 +233,7 @@ export function describeBlueprint(game, item) {
   const rarity = GRADES[grade - 1];
   if (isCurse(item)) {
     const curse = CURSES[item.curse];
-    return { name: curse.name, grade: 3, rarity: 'Cursed', description: curse.upside + '.', downside: curse.downside + '.', effect: 'Lasts all run', curse: true, icon: '  .-.  \n (x x) \n  |=|  ' };
+    return { name: curse.name, grade: 3, rarity: 'Cursed', description: curse.upside + '.', downside: curse.downside + '.', effect: 'Lasts all run', curse: true, icon: CURSE_ICON };
   }
   if (isWeapon(item)) {
     const gun = WEAPONS[item.weapon], trait = TRAITS[item.trait];

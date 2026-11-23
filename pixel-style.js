@@ -1,5 +1,5 @@
-import { AsciiStyle, surface } from './ascii-style.js?v=3.10.0';
-import { PIXEL_ENEMIES, pixelSpire, pixelPalette, paintPixels } from './pixel-art.js?v=3.10.0';
+import { AsciiStyle, surface } from './ascii-style.js?v=3.11.0';
+import { PIXEL_ENEMIES, pixelSpire, pixelPalette, paintPixels } from './pixel-art.js?v=3.11.0';
 
 // Each symbol the ASCII style prints becomes a 3x3 block of pixels in the same cell.
 export const GLYPHS = {
@@ -15,21 +15,20 @@ export const FALLBACK = '....x....';
 
 // The pixel art style. It inherits every placement from the ASCII style and only
 // changes how sprites and symbols are drawn, so the two line up exactly.
+export const PIXEL_FONT = '"Spire Pixel", "Spire ASCII", monospace';
+
 export class PixelStyle extends AsciiStyle {
   static key = 'pixel';
   static label = 'Pixel';
+  static fontFamily = 'Spire Pixel';
 
   // Words on the battlefield use the pixel font; symbols are drawn as pixels by mark().
   font(size, weight = 'bold') {
     this.markSize = size;
-    this.ctx.font = `${weight === 400 ? 400 : 600} ${Math.round(size * 1.2)}px "Pixelify Sans", monospace`;
+    this.ctx.font = `${weight === 400 ? 400 : 700} ${size}px ${PIXEL_FONT}`;
   }
 
   prepare() {
-    if (!this.fontRequested) {
-      this.fontRequested = true;
-      document.fonts?.load('16px "Pixelify Sans"').then(() => { this.stale = true; }, () => {});
-    }
     this.palette = pixelPalette(this.colors);
     this.spires = new Map();
     super.prepare();

@@ -1,21 +1,22 @@
 /* Art styles change the interface as well as the battlefield. */
-@font-face {
-  font-family: "Pixelify Sans";
-  src: url("./fonts/pixelify-sans.woff2") format("woff2");
-  font-weight: 400 700;
-  font-display: swap;
-}
+/* Each style has its own typeface, built with the ASCII font's exact metrics
+   (tools/build-fonts.py), so text keeps the same box in every style. Nothing
+   below may change layout: only paint (color, background, shadows, clip-path). */
+@font-face { font-family:"Spire Pixel"; src:url("./fonts/spire-pixel-400.woff2") format("woff2"); font-weight:100 549; font-display:block; }
+@font-face { font-family:"Spire Pixel"; src:url("./fonts/spire-pixel-700.woff2") format("woff2"); font-weight:550 1000; font-display:block; }
+@font-face { font-family:"Spire Vector"; src:url("./fonts/spire-vector-400.woff2") format("woff2"); font-weight:100 549; font-display:block; }
+@font-face { font-family:"Spire Vector"; src:url("./fonts/spire-vector-700.woff2") format("woff2"); font-weight:550 1000; font-display:block; }
 
 /* ---------- Pixel ---------- */
 :root[data-art=pixel] {
-  --ascii-mono: "DejaVu Sans Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  --mono: "Pixelify Sans", var(--ascii-mono);
+  --mono: "Spire Pixel", var(--ascii-mono);
   --step: polygon(0 4px, 2px 4px, 2px 2px, 4px 2px, 4px 0, calc(100% - 4px) 0, calc(100% - 4px) 2px, calc(100% - 2px) 2px, calc(100% - 2px) 4px, 100% 4px, 100% calc(100% - 4px), calc(100% - 2px) calc(100% - 4px), calc(100% - 2px) calc(100% - 2px), calc(100% - 4px) calc(100% - 2px), calc(100% - 4px) 100%, 4px 100%, 4px calc(100% - 2px), 2px calc(100% - 2px), 2px calc(100% - 4px), 0 calc(100% - 4px));
 }
 /* ASCII art keeps its monospace grid underneath, so redrawn art lines up. */
 :root[data-art=pixel] pre { font-family: var(--ascii-mono); }
 
 /* Glyph art (wordmark, workshop icons) is replaced by its pixel image in the same box. */
+:root[data-art=pixel] .power-sigil { --glyph-ink: var(--accent); }
 :root[data-art=pixel] .glyph-art {
   color: transparent !important; text-shadow: none !important;
   background: var(--glyph-image) var(--glyph-position) / var(--glyph-size) no-repeat;
@@ -39,15 +40,13 @@
 }
 :root[data-art=pixel] .metric + .metric::before { height: 34px; }
 
-/* Buttons drop their brackets for a pixel box. */
-:root[data-art=pixel] .button-bracket { display: none; }
+/* Buttons keep their brackets' room but draw a pixel box instead. */
+:root[data-art=pixel] .button-bracket { color: transparent; }
 :root[data-art=pixel] .controls button {
-  padding: 4px 8px; background: var(--surface);
+  background: var(--surface);
   box-shadow: inset 0 0 0 2px var(--line); clip-path: var(--step);
 }
 :root[data-art=pixel] .controls button:is(:hover, :focus-visible) { box-shadow: inset 0 0 0 2px var(--accent); }
-:root[data-art=pixel] .speed-button::before, :root[data-art=pixel] .speed-button::after { content: none; }
-:root[data-art=pixel] .speed-button { padding: 1px 5px; }
 :root[data-art=pixel] .speed-button[aria-pressed=true] { background: var(--accent); color: var(--bg); clip-path: var(--step); }
 
 /* Canvas text and the cursor follow the pixel font too. */
@@ -55,14 +54,26 @@
 
 /* ---------- Vector ---------- */
 :root[data-art=vector] {
-  --ascii-mono: "DejaVu Sans Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  --mono: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: "Spire Vector", var(--ascii-mono);
 }
 :root[data-art=vector] pre { font-family: var(--ascii-mono); }
-:root[data-art=vector] .glyph-art {
+:root[data-art=vector] .glyph-art:not(.glyph-mask) {
   color: transparent !important; text-shadow: none !important;
   background: var(--glyph-image) var(--glyph-position) / var(--glyph-size) no-repeat;
 }
+/* Vector icons and the wordmark are masks filled with the element's own color,
+   so they follow the theme, hover and disabled states. */
+:root[data-art=vector] .glyph-art.glyph-mask {
+  -webkit-text-fill-color: transparent; text-shadow: none !important;
+  background: currentColor;
+  -webkit-mask: var(--glyph-image) var(--glyph-position) / var(--glyph-size) no-repeat;
+  mask: var(--glyph-image) var(--glyph-position) / var(--glyph-size) no-repeat;
+}
+:root[data-art=vector] :is(.section-head i, .feed-head i, .brand-description b) {
+  -webkit-text-fill-color: transparent; background: currentColor;
+  -webkit-mask: var(--vector-mark) center / .62em .62em no-repeat; mask: var(--vector-mark) center / .62em .62em no-repeat;
+}
+:root[data-art=vector] { --vector-mark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M5 0L10 5 5 10 0 5Z'/%3E%3C/svg%3E"); }
 /* Frames: soft rounded panels. */
 :root[data-art=vector] .frame { border-radius: 14px; }
 :root[data-art=vector] .frame-art { border: 1.5px solid var(--line); border-radius: 14px; }
@@ -73,14 +84,13 @@
 :root[data-art=vector] .upgrade-row + .upgrade-row::before { background: var(--faint); }
 :root[data-art=vector] :is(.metric + .metric, .relic-rack)::before { content: ''; width: 1px; background: var(--line); }
 :root[data-art=vector] .metric + .metric::before { height: 34px; }
-:root[data-art=vector] .button-bracket { display: none; }
+:root[data-art=vector] .button-bracket { color: transparent; }
 :root[data-art=vector] .controls button {
-  padding: 4px 12px; border-radius: 999px; background: var(--surface);
+  border-radius: 999px; background: var(--surface);
   box-shadow: inset 0 0 0 1.5px var(--line);
 }
 :root[data-art=vector] .controls button:is(:hover, :focus-visible) { box-shadow: inset 0 0 0 1.5px var(--accent); }
-:root[data-art=vector] .speed-button::before, :root[data-art=vector] .speed-button::after { content: none; }
-:root[data-art=vector] .speed-button { padding: 1px 7px; border-radius: 999px; }
+:root[data-art=vector] .speed-button { border-radius: 999px; }
 :root[data-art=vector] .speed-button[aria-pressed=true] { background: var(--accent); color: var(--bg); }
 :root[data-art=vector] #ascii-cursor { font-family: var(--ascii-mono); }
 
