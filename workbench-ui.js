@@ -1,6 +1,6 @@
-import { $, element, pad, setText, setTier } from './ui.js?v=3.12.0';
-import { forgeWeapon, foundry, openCache, workshopCosts } from './workshop.js?v=3.12.0';
-import { WEAPONS, TRAITS, MOUNT_OUTPUT, HARDPOINT_BOSSES, GRADE_NAMES, MAX_GRADE, MOD_GRADES, mountStats, mountTitle, describeMount, weaponReport } from './weapons.js?v=3.12.0';
+import { $, element, pad, setText, setTier } from './ui.js?v=3.12.1';
+import { forgeWeapon, foundry, openCache, workshopCosts } from './workshop.js?v=3.12.1';
+import { WEAPONS, TRAITS, MOUNT_OUTPUT, HARDPOINT_BOSSES, GRADE_NAMES, MAX_GRADE, MOD_GRADES, mountStats, mountTitle, describeMount, weaponReport } from './weapons.js?v=3.12.1';
 
 export const SERVICES = {
   caches: { name: 'Big cache', icon: '  ____ \n /___/|\n |___|/' },

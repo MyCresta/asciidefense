@@ -225,6 +225,8 @@ export function onStrike(game, enemy, direct) {
   }
 }
 
+export const MAX_HIT = .35;
+
 export function impact(game, enemy, base) {
   let damage = game.powers.glass ? Math.ceil(base * 1.25) : base;
   if (game.powers.sapper && enemy?.sapUntil > game.time) damage = Math.ceil(damage * .7);
@@ -235,7 +237,8 @@ export function impact(game, enemy, base) {
       damage -= share;
     }
   }
-  if (game.powers.bulkhead) damage = Math.min(damage, Math.ceil(game.maxHp * .12));
+  // No single impact takes more than 35% of maximum integrity (12% with Bulkhead).
+  damage = Math.min(damage, Math.ceil(game.maxHp * (game.powers.bulkhead ? .12 : MAX_HIT)));
   if (game.powers.plating && game.relicState) game.relicState.plateUntil = game.time + 3;
   if (game.powers.returnfire) burst(game, CORE, 22, damage * 2);
   if (game.powers.fuse && !game.fuseUsed && game.hp > 0 && damage >= game.hp) {

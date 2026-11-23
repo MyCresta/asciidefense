@@ -1,7 +1,7 @@
-import { UPGRADES } from './content.js?v=3.12.0';
-import { cost as relicCost } from './relic-effects.js?v=3.12.0';
-import { CURSES, applyCurse, cursed } from './hazards.js?v=3.12.0';
-import { WEAPONS, MAX_GRADE, GRADE_NAMES, TRAITS, MODS, ROLL_STATS, ROLL_MIN, TEMPER_MAX, availableWeapons, rollWeapon, receiveWeapon, replaceWeapon, forgePrice, mountTitle, setGrade, rollText } from './weapons.js?v=3.12.0';
+import { UPGRADES } from './content.js?v=3.12.1';
+import { cost as relicCost } from './relic-effects.js?v=3.12.1';
+import { CURSES, applyCurse, cursed } from './hazards.js?v=3.12.1';
+import { WEAPONS, MAX_GRADE, GRADE_NAMES, TRAITS, MODS, ROLL_STATS, ROLL_MIN, TEMPER_MAX, availableWeapons, rollWeapon, receiveWeapon, replaceWeapon, forgePrice, mountTitle, setGrade, rollText } from './weapons.js?v=3.12.1';
 
 export const CURSE_ICON = '  .-.  \n (x x) \n  |=|  ';
 

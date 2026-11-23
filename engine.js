@@ -1,11 +1,11 @@
-import { ENEMIES, UPGRADES, POWERS, DOCTRINES, BLUEPRINTS, SYNERGIES, RUN_PROFILES } from './content.js?v=3.12.0';
-import { restoreCheckpoint, clearCheckpoint } from './checkpoint.js?v=3.12.0';
+import { ENEMIES, UPGRADES, POWERS, DOCTRINES, BLUEPRINTS, SYNERGIES, RUN_PROFILES } from './content.js?v=3.12.1';
+import { restoreCheckpoint, clearCheckpoint } from './checkpoint.js?v=3.12.1';
 
-import { createWorkshop, awardSalvage, pickBlueprint } from './workshop.js?v=3.12.0';
-import { earnHardpoint, initWeapons, WEAPONS, fireMounts, spreadFire } from './weapons.js?v=3.12.0';
-import * as Relics from './relic-effects.js?v=3.12.0';
-import { applyEliteTrait, rollEliteTrait, cursed } from './hazards.js?v=3.12.0';
-import { applyPerks } from './perks.js?v=3.12.0';
+import { createWorkshop, awardSalvage, pickBlueprint } from './workshop.js?v=3.12.1';
+import { earnHardpoint, initWeapons, WEAPONS, fireMounts, spreadFire } from './weapons.js?v=3.12.1';
+import * as Relics from './relic-effects.js?v=3.12.1';
+import { applyEliteTrait, rollEliteTrait, cursed } from './hazards.js?v=3.12.1';
+import { applyPerks } from './perks.js?v=3.12.1';
 
 export { ENEMIES, UPGRADES, POWERS, DOCTRINES, BLUEPRINTS, SYNERGIES, RUN_PROFILES };
 export const WORLD = Object.freeze({ x: 140, y: 84 });

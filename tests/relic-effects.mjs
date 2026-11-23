@@ -200,3 +200,11 @@ test('relics with mechanics of their own: wind, stalls, marks, sapping and scrap
   assert.equal(Relics.impact(game, target, 20), 14);
   assert.ok(Relics.cooldowns(game).some(item => item.label === 'Stall' && item.active));
 });
+
+test('no single core impact takes more than 35% of maximum integrity, or 12% with Bulkhead', () => {
+  const game = arena({});
+  assert.equal(Relics.impact(game, hostile(1), 80), 35);
+  assert.equal(Relics.impact(game, hostile(1), 20), 20);
+  game.powers.bulkhead = 1;
+  assert.equal(Relics.impact(game, hostile(1), 80), 12);
+});
