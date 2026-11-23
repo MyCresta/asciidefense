@@ -41,3 +41,13 @@ export function drawStats(node, entries, dotted = false) {
   });
   node.replaceChildren(...rows);
 }
+
+// Rarity colours run from plain (1) to gold (5). Cache grades, weapon grades and relic rarities share them.
+const NAME_TIERS = { standard: 1, common: 1, reserve: 1, refined: 2, tuned: 2, uncommon: 2, masterwork: 3, exotic: 4, prime: 4, rare: 4,
+  mythic: 5, legend: 5, ascendant: 5, apex: 5 };
+export const rarityTier = name => NAME_TIERS[String(name || '').toLowerCase()] || 1;
+
+export function setTier(node, name) {
+  const tier = String(rarityTier(name));
+  if (node.dataset.tier !== tier) node.dataset.tier = tier;
+}

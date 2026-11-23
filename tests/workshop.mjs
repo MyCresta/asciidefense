@@ -31,9 +31,11 @@ test('v2 active, paused and pending-draft saves keep maxed ranks and 17,000 scra
     storage.setItem(RECORDS_KEY, records);
     storage.setItem('last-spire.checkpoint.v2', JSON.stringify(old));
     const game = start(77, storage, true);
-    for (const key of ['run','time','hp','scrap','status','kills','bossKills','selected','focusId','choices','levels','powers']) {
+    for (const key of ['run','time','hp','scrap','status','kills','bossKills','selected','focusId','choices','powers']) {
       assert.deepEqual(game[key], old.state[key], 'v2 field ' + key);
     }
+    // Old ranks carry over; upgrades added later start at zero.
+    for (const key of Object.keys(UPGRADES)) assert.equal(game.levels[key], old.state.levels[key] ?? 0, 'v2 level ' + key);
     assert.equal(storage.getItem(RECORDS_KEY), records);
     assert.equal(storage.getItem('last-spire.checkpoint.v2'), null);
     assert.ok(storage.getItem(CHECKPOINT_KEY));

@@ -1,9 +1,9 @@
 // Keep lifetime unlocks independent from the current run. Losing a checkpoint
 // (including when browser storage is full) must never reset the player's record.
-import { DOCTRINES, ENEMIES, POWERS, RUN_PROFILES, UPGRADES } from './content.js?v=3.8.0';
-import { WEAPONS, TRAITS, MAX_GRADE } from './weapons.js?v=3.8.0';
-import { createWorkshop, validWorkshop } from './workshop.js?v=3.8.0';
-import { ELITE_TRAITS, CURSES, ROUTES } from './hazards.js?v=3.8.0';
+import { DOCTRINES, ENEMIES, POWERS, RUN_PROFILES, UPGRADES } from './content.js?v=3.9.0';
+import { WEAPONS, TRAITS, MAX_GRADE } from './weapons.js?v=3.9.0';
+import { createWorkshop, validWorkshop, validRolls, validMods } from './workshop.js?v=3.9.0';
+import { ELITE_TRAITS, CURSES, ROUTES } from './hazards.js?v=3.9.0';
 
 const KEY = 'last-spire.checkpoint.v3';
 const LEGACY_KEY = 'last-spire.checkpoint.v2';
@@ -23,8 +23,9 @@ const RUN_FIELDS = [
   'pulseAt', 'wardAt', 'starterReady', 'relics', 'fuseUsed', 'profile',
   'draftHistory', 'workshop', 'armory',
   'stats', 'daily', 'rngState', 'draftReturn',
-  'curses', 'route', 'path'
+  'curses', 'route', 'path', 'barrier', 'relicState', 'deck'
 ];
+const RELIC_STATE = ['streak', 'streakUntil', 'plateUntil', 'hitAt', 'echo'];
 
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const number = value => Number.isFinite(value) && Math.abs(value) <= Number.MAX_SAFE_INTEGER;
@@ -70,6 +71,7 @@ function validArmory(armory) {
     if (!record(mount) || !has(WEAPONS, mount.key) || !number(mount.cooldown) || mount.cooldown < 0 || keys.has(mount.key)) return false;
     if (!Number.isInteger(mount.grade) || mount.grade < 1 || mount.grade > MAX_GRADE) return false;
     if (mount.trait !== null && !has(TRAITS, mount.trait)) return false;
+    if (!validRolls(mount.rolls) || !validMods(mount.mods) || (mount.shots !== undefined && !natural(mount.shots))) return false;
     keys.add(mount.key);
   }
   return true;
@@ -88,6 +90,9 @@ function validRunExtras(s) {
     && s.route.options.length === 2 && s.route.options.every(key => has(ROUTES, key)))) return false;
   if (s.path !== null && !(record(s.path) && has(ROUTES, s.path.key) && number(s.path.until))) return false;
   if (s.daily !== null && !(typeof s.daily === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.daily))) return false;
+  if (!number(s.barrier) || s.barrier < 0 || s.barrier > 1000) return false;
+  if (!record(s.relicState) || !numbers(s.relicState, RELIC_STATE)) return false;
+  if (s.deck !== null && !(list(s.deck, 512) && s.deck.every(key => has(POWERS, key)))) return false;
   return Number.isSafeInteger(s.rngState) && s.rngState >= 0 && s.rngState <= 0xFFFFFFFF;
 }
 
@@ -111,10 +116,10 @@ function validState(s, game) {
 
   if (!list(s.choices, 3) || !s.choices.every(key => has(POWERS, key)) || new Set(s.choices).size !== s.choices.length) return false;
   if (s.status === 'draft') {
-    if (s.choices.length !== 3 || !['starter', 'time', 'boss'].includes(s.draftReason)) return false;
+    if (s.choices.length !== 3 || !['starter', 'time', 'boss', 'bought'].includes(s.draftReason)) return false;
     if (s.choices.some(key => POWERS[key].maxStacks != null && s.powers[key] >= POWERS[key].maxStacks)) return false;
   } else if (s.choices.length) return false;
-  if (!list(s.queue, 16) || !s.queue.every(item => ['time', 'boss', 'starter'].includes(item))) return false;
+  if (!list(s.queue, 16) || !s.queue.every(item => ['time', 'boss', 'starter', 'bought'].includes(item))) return false;
   if (s.warning !== null && !(record(s.warning) && has(ENEMIES, s.warning.type)
     && onField(s.warning.x, s.warning.y) && number(s.warning.at) && typeof s.warning.edge === 'string' && s.warning.edge.length <= 16)) return false;
 
@@ -199,6 +204,12 @@ function upgradeFittedState(state) {
 // Saves from before run statistics and the daily challenge.
 function addRunExtras(state) {
   if (!record(state)) return state;
+  // Saves from before the deeper progression: new upgrades start at zero and the whole relic pool stays open.
+  if (state.deck === undefined) {
+    const levels = record(state.levels) ? { ...state.levels } : state.levels;
+    if (record(levels)) for (const key of Object.keys(UPGRADES)) if (levels[key] === undefined) levels[key] = 0;
+    state = { ...state, levels, barrier: 0, deck: null, relicState: { streak: 0, streakUntil: 0, plateUntil: 0, hitAt: -1000, echo: 0 } };
+  }
   if (state.curses === undefined) state = { ...state, curses: [], route: null, path: null };
   if (state.draftReturn === undefined) state = { ...state, draftReturn: 'running' };
   if (state.stats !== undefined) return state;
