@@ -1,9 +1,9 @@
 // Keep lifetime unlocks independent from the current run. Losing a checkpoint
 // (including when browser storage is full) must never reset the player's record.
-import { DOCTRINES, ENEMIES, POWERS, RUN_PROFILES, UPGRADES } from './content.js?v=3.9.0';
-import { WEAPONS, TRAITS, MAX_GRADE } from './weapons.js?v=3.9.0';
-import { createWorkshop, validWorkshop, validRolls, validMods } from './workshop.js?v=3.9.0';
-import { ELITE_TRAITS, CURSES, ROUTES } from './hazards.js?v=3.9.0';
+import { DOCTRINES, ENEMIES, POWERS, RUN_PROFILES, UPGRADES } from './content.js?v=3.10.0';
+import { WEAPONS, TRAITS, MAX_GRADE } from './weapons.js?v=3.10.0';
+import { createWorkshop, validWorkshop, validRolls, validMods } from './workshop.js?v=3.10.0';
+import { ELITE_TRAITS, CURSES, ROUTES } from './hazards.js?v=3.10.0';
 
 const KEY = 'last-spire.checkpoint.v3';
 const LEGACY_KEY = 'last-spire.checkpoint.v2';
@@ -72,6 +72,9 @@ function validArmory(armory) {
     if (!Number.isInteger(mount.grade) || mount.grade < 1 || mount.grade > MAX_GRADE) return false;
     if (mount.trait !== null && !has(TRAITS, mount.trait)) return false;
     if (!validRolls(mount.rolls) || !validMods(mount.mods) || (mount.shots !== undefined && !natural(mount.shots))) return false;
+    if (mount.focus !== undefined && !natural(mount.focus)) return false;
+    if (mount.pushAt !== undefined && !number(mount.pushAt)) return false;
+    if (mount.lock !== undefined && !(typeof mount.lock === 'string' && mount.lock.length <= 20)) return false;
     keys.add(mount.key);
   }
   return true;

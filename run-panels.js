@@ -1,12 +1,12 @@
-import { WEAPONS, WEAPON_COMBOS, GRADE_NAMES, mountTitle, describeMount } from './weapons.js?v=3.9.0';
-import { PERKS, buyPerk, perkBank, readPerks } from './perks.js?v=3.9.0';
-import { workshopCosts, describeBlueprint, rerollCache, closeCache, fitChoices, cancelFit } from './workshop.js?v=3.9.0';
-import { BLUEPRINTS, ENEMIES, RUN_PROFILES, POWERS, SYNERGIES, UPGRADES } from './content.js?v=3.9.0';
-import { ENEMY_PORTRAITS } from './art.js?v=3.9.0';
-import { paintPortrait } from './pixel-art.js?v=3.9.0';
-import { vectorElement } from './vector-art.js?v=3.9.0';
-import { formatTime } from './engine.js?v=3.9.0';
-import { $, decorateFrame, drawStats, element, pad, setText, setTier, tierName } from './ui.js?v=3.9.0';
+import { WEAPONS, WEAPON_COMBOS, GRADE_NAMES, mountTitle, describeMount } from './weapons.js?v=3.10.0';
+import { PERKS, buyPerk, perkBank, readPerks } from './perks.js?v=3.10.0';
+import { workshopCosts, describeBlueprint, rerollCache, closeCache, fitChoices, cancelFit } from './workshop.js?v=3.10.0';
+import { BLUEPRINTS, ENEMIES, RUN_PROFILES, POWERS, SYNERGIES, UPGRADES } from './content.js?v=3.10.0';
+import { ENEMY_PORTRAITS } from './art.js?v=3.10.0';
+import { paintPortrait } from './pixel-art.js?v=3.10.0';
+import { vectorElement } from './vector-art.js?v=3.10.0';
+import { formatTime } from './engine.js?v=3.10.0';
+import { $, decorateFrame, drawStats, element, pad, setText, setTier, tierName } from './ui.js?v=3.10.0';
 
 function entry(name, description, marker = '') {
   const row = element('li');
@@ -233,12 +233,14 @@ export function runPanels(game, { pick, start, refresh, changed }) {
     const reason = cache ? 'SALVAGE CACHE' : boss ? 'SOVEREIGN SALVAGE' : starter ? 'STARTING RELIC' : bought ? 'BOUGHT DRAFT' : 'TIMED DRAFT';
     setText($('draft-kicker'), reason + '  //  ' + formatTime(game.time));
     const arms = cache && offer.every(item => item.weapon);
-    if (arms) setText($('draft-kicker'), 'ARMS CACHE  //  ' + formatTime(game.time));
-    setText($('draft-title'), arms ? 'Choose a weapon' : cache && offer.some(item => item.weapon) ? 'Choose a blueprint or weapon' : cache ? 'Choose a blueprint' : starter ? 'Choose your first relic' : 'Choose a relic');
-    setText($('draft-prompt'), arms ? 'Fit one found weapon to your hardpoints.' : cache ? 'Pick one.' : boss ? 'The Sovereign fell. Recover one effect for this run.' : 'Install one effect for this run.');
+    const opening = cache && game.workshop.starter;
+    if (arms) setText($('draft-kicker'), (opening ? 'STARTING WEAPON' : 'ARMS CACHE') + '  //  ' + formatTime(game.time));
+    setText($('draft-title'), opening ? 'Choose your weapon' : arms ? 'Choose a weapon' : cache && offer.some(item => item.weapon) ? 'Choose a blueprint or weapon' : cache ? 'Choose a blueprint' : starter ? 'Choose your first relic' : 'Choose a relic');
+    setText($('draft-prompt'), opening ? 'Each one rolled its own stats and trait for this run.' : arms ? 'Fit one found weapon to your hardpoints.' : cache ? 'Pick one.' : boss ? 'The Sovereign fell. Recover one effect for this run.' : 'Install one effect for this run.');
     $('cache-actions').hidden = !cache;
     setText($('cache-shelve'), '[ Save for later ]');
-    $('cache-reroll').hidden = false;
+    $('cache-shelve').hidden = opening;
+    $('cache-reroll').hidden = opening;
     if (cache) {
       const cost = workshopCosts(game).reroll;
       setText($('cache-wallet'),'SCRAP $' + game.scrap);
@@ -313,6 +315,7 @@ export function runPanels(game, { pick, start, refresh, changed }) {
     setText($('cache-wallet'),'SCRAP $' + game.scrap);
     $('cache-reroll').hidden = true;
     setText($('cache-shelve'), '[ Back ]');
+    $('cache-shelve').hidden = false;
     const cards = choices.map((choice, i) => {
       const card = element('button', 'draft-card frame fit-card');
       const choose = element('span', 'draft-select', '[ ' + (i + 1) + ' ] ' + (choice.mount ? 'Replace' : 'Reclaim'));

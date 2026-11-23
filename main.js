@@ -1,19 +1,19 @@
-import { SPEEDS, SimulationClock } from './clock.js?v=3.9.0';
-import { initAppearance } from './appearance.js?v=3.9.0';
-import { workbench } from './workbench-ui.js?v=3.9.0';
-import { pickBlueprint, fitChoices, workshopCosts } from './workshop.js?v=3.9.0';
-import { maxWeaponRange, mountStats, mountTitle, WEAPON_COMBOS, weaponComboActive } from './weapons.js?v=3.9.0';
-import { Game, formatTime } from './engine.js?v=3.9.0';
-import { ELITE_TRAITS, ROUTES, chooseRoute, CURSES } from './hazards.js?v=3.9.0';
-import { ENEMIES, POWERS, RUN_PROFILES, SYNERGIES, UPGRADES } from './content.js?v=3.9.0';
-import { TITLE, PORTRAIT, ENEMY_PORTRAITS } from './art.js?v=3.9.0';
-import { Field, ART_STYLES } from './field.js?v=3.9.0';
-import { initPixelUI } from './pixel-ui.js?v=3.9.0';
-import { paintPortrait } from './pixel-art.js?v=3.9.0';
-import { fillVectorElement } from './vector-art.js?v=3.9.0';
-import { saveCheckpoint } from './checkpoint.js?v=3.9.0';
-import { runPanels } from './run-panels.js?v=3.9.0';
-import { $, pad, decorateFrame, drawStats, element, setText, tierName, setTier } from './ui.js?v=3.9.0';
+import { SPEEDS, SimulationClock } from './clock.js?v=3.10.0';
+import { initAppearance } from './appearance.js?v=3.10.0';
+import { workbench } from './workbench-ui.js?v=3.10.0';
+import { pickBlueprint, fitChoices, workshopCosts, offerStartingArms } from './workshop.js?v=3.10.0';
+import { maxWeaponRange, mountStats, mountTitle, WEAPON_COMBOS, weaponComboActive } from './weapons.js?v=3.10.0';
+import { Game, formatTime } from './engine.js?v=3.10.0';
+import { ELITE_TRAITS, ROUTES, chooseRoute, CURSES } from './hazards.js?v=3.10.0';
+import { ENEMIES, POWERS, RUN_PROFILES, SYNERGIES, UPGRADES } from './content.js?v=3.10.0';
+import { TITLE, PORTRAIT, ENEMY_PORTRAITS } from './art.js?v=3.10.0';
+import { Field, ART_STYLES } from './field.js?v=3.10.0';
+import { initPixelUI } from './pixel-ui.js?v=3.10.0';
+import { paintPortrait } from './pixel-art.js?v=3.10.0';
+import { fillVectorElement } from './vector-art.js?v=3.10.0';
+import { saveCheckpoint } from './checkpoint.js?v=3.10.0';
+import { runPanels } from './run-panels.js?v=3.10.0';
+import { $, pad, decorateFrame, drawStats, element, setText, tierName, setTier } from './ui.js?v=3.10.0';
 
 const root = document.documentElement;
 function preference(key, fallback) {
@@ -466,8 +466,9 @@ function commitAction() {
   setText($('announcer'), game.log[0]?.text || '');
   refreshUI();
 }
-// Every run opens with the starting relic pick.
+// Every run opens with a pick of three weapons, then the starting relic pick.
 function openStartingRelic() {
+  if (game.starterReady && game.time === 0 && game.status === 'running' && offerStartingArms(game)) return;
   if (game.starterReady && game.time < 1 && game.status === 'running') game.openStarter();
 }
 function restart(key, options = {}) {
@@ -479,7 +480,7 @@ function restart(key, options = {}) {
 }
 function installRelic(key) {
   if (game.status === 'cache') {
-    if (pickBlueprint(game,key)) { lastChoiceAt = performance.now(); commitAction(); }
+    if (pickBlueprint(game,key)) { lastChoiceAt = performance.now(); openStartingRelic(); commitAction(); }
     return;
   }
   if (!key || !game.pickPower(key)) return;
