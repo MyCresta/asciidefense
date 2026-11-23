@@ -150,6 +150,8 @@ export const MOTIFS = {
   arc: [S(c(7.5, 12, 2.5)), S('M10 12l2.5-3 2 5 2-4 3.5 2', 1.5)],
   flak: [S('M6.5 18.5h11l-1.8-3H8.3Z'), S('M9.8 15.5l3.4-7.5 2.6 1.2-2.4 6.3', 1.6), F(star(17, 5.8, 2.6, 1, 6))],
   cryo: [S('M4 10.5h7v3H4ZM11 11h2.5v2H11Z'), S('M17 8v8M13.6 10l6.8 4M13.6 14l6.8-4', 1.3)],
+  beam: [S(c(7, 12, 3)), S('M10 12h10', 2.4), S('M10 9.5h8M10 14.5h8', 1, .5), F(c(7, 12, 1.1))],
+  pulse: [F(c(12, 12, 1.8)), S(c(12, 12, 4.5), 1.6), S(c(12, 12, 7.5), 1.3, .6)],
   crate: [S('M5 9l7-3.5L19 9v7l-7 3.5L5 16Z'), S('M5 9l7 3.5L19 9M12 12.5v7', 1.3)],
   tune: [S(GEAR(4.4)), F(c(12, 12, 2))],
   mystery: [S(rect(7, 5, 10, 14, 1.8)), S('M10.2 10a1.9 1.9 0 1 1 2.6 1.8c-.6.3-.8.7-.8 1.4', 1.5), F(c(12, 15.6, .9))],
@@ -192,7 +194,7 @@ const UPGRADE_MOTIFS = {
   barrier: 'wall', salvage: 'magnet',
 };
 
-const WEAPON_MOTIFS = { bolt: 'crossbow', scatter: 'scattergun', lance: 'lance', coil: 'arc', mortar: 'flak', cryo: 'cryo' };
+const WEAPON_MOTIFS = { bolt: 'crossbow', scatter: 'scattergun', lance: 'lance', coil: 'arc', mortar: 'flak', cryo: 'cryo', beam: 'beam', pulse: 'pulse' };
 const SERVICE_MOTIFS = { caches: 'crate', tune: 'tune', repair: 'plus', relic: 'mystery' };
 
 export const ICON_KEYS = { relic: RELIC_MOTIFS, upgrade: UPGRADE_MOTIFS, weapon: WEAPON_MOTIFS, service: SERVICE_MOTIFS };

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { saveCheckpoint } from '../checkpoint.js';
-import { WEAPONS, TRAITS, MODS, MAX_GRADE, mountStats, earnHardpoint } from '../weapons.js';
+import { WEAPONS, TRAITS, MODS, MAX_GRADE, mountStats, earnHardpoint, fireMounts } from '../weapons.js';
 import { openCache, pickBlueprint, closeCache, foundry, forgeWeapon, workshopCosts, fitChoices } from '../workshop.js';
 import { CHECKPOINT_KEY, MemoryStorage, start } from './support/gameplay.mjs';
 
@@ -234,4 +234,61 @@ test('a version 3 save keeps its fitted weapons as untraited standard finds', ()
   const restored = start(5, storage, true);
   assert.deepEqual(restored.armory, { slots: 2, mounts: [mount('lance', { cooldown: 0.25 }), mount('bolt')] });
   assert.equal(restored.workshop.armsCaches, 0);
+});
+
+test('each run can open with a pick of three different rolled weapons that cannot be shelved', async () => {
+  const { offerStartingArms, closeCache: close, rerollCache } = await import('../workshop.js');
+  const storage = new MemoryStorage();
+  const game = start(404, storage);
+  game.scrap = 1e5;
+  assert.equal(offerStartingArms(game), true);
+  assert.equal(game.status, 'cache');
+  const offer = game.workshop.offer;
+  assert.equal(new Set(offer.map(item => item.weapon)).size, 3);
+  for (const item of offer) assert.equal(item.grade, 1);
+  assert.equal(close(game), false);
+  assert.equal(rerollCache(game), false);
+  assert.equal(saveCheckpoint(game), true);
+  assert.deepEqual(start(9, storage, true).workshop.offer, offer);
+  const caches = game.workshop.caches;
+  const choice = offer[2];
+  assert.equal(pickBlueprint(game, choice.key), true);
+  assert.equal(game.status, 'running');
+  assert.equal(game.workshop.caches, caches);
+  assert.equal(game.armory.mounts.length, 1);
+  assert.equal(game.armory.mounts[0].key, choice.weapon);
+  assert.deepEqual(game.armory.mounts[0].rolls, choice.rolls);
+  assert.equal(offerStartingArms(game), false);
+});
+
+test('the ion beam ramps on one target and the pulse ring hits and pushes everything close', () => {
+  const game = start(505);
+  game.enemies = [];
+  game.armory.mounts = [mount('beam')];
+  const boss = game.spawn('brute', 20, 0);
+  boss.hp = boss.maxHp = 1e9;
+  const dealt = [];
+  for (let i = 0; i < 14; i++) {
+    const before = boss.hp;
+    game.armory.mounts[0].cooldown = 0;
+    game.random = () => .99;
+    fireMounts(game, 0);
+    dealt.push(before - boss.hp);
+  }
+  assert.ok(dealt[10] > dealt[0] * 2);
+  assert.equal(dealt[13], dealt[12]);
+
+  const ring = start(506);
+  ring.enemies = [];
+  ring.armory.mounts = [mount('pulse')];
+  const near = ring.spawn('crawler', 10, 0), close = ring.spawn('crawler', 0, -14), far = ring.spawn('crawler', 60, 0);
+  for (const enemy of [near, close, far]) enemy.hp = enemy.maxHp = 1e6;
+  fireMounts(ring, 0);
+  assert.ok(near.hp < 1e6 && close.hp < 1e6);
+  assert.equal(far.hp, 1e6);
+  assert.ok(near.x > 10 && close.y < -14);
+  const x = near.x;
+  ring.armory.mounts[0].cooldown = 0;
+  fireMounts(ring, 0);
+  assert.equal(near.x, x);
 });

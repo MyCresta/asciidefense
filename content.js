@@ -45,61 +45,61 @@ export const ENEMIES = {
 export const UPGRADES = {
   range: {
     name: 'Range', label: 'Range', group: 'arsenal',
-    description: 'Engage targets farther from the spire.',
+    description: '+4.5 firing range per level.',
     icon: "   .-.   \n--( + )--\n   '-'   ",
     maxLevel: 16, soft: 10, baseCost: 10, growth: 1.48
   },
   rate: {
     name: 'Fire rate', label: 'Fire rate', group: 'arsenal',
-    description: 'Fire more shots per second.',
+    description: '+17% fire rate per level.',
     icon: '  // //\n // // \n// //  ',
     maxLevel: 16, soft: 10, baseCost: 14, growth: 1.48
   },
   splash: {
     name: 'Splash', label: 'Splash', group: 'arsenal',
-    description: 'Hit hostiles around the primary target.',
+    description: 'Shots blast hostiles around the target for 65% damage. Each level widens the blast.',
     icon: '\\  |  /\n-- * --\n/  |  \\',
     maxLevel: 14, soft: 10, baseCost: 18, growth: 1.44
   },
   damage: {
     name: 'Impact', label: 'Impact', group: 'munitions',
-    description: 'Increase the damage of each shot.',
+    description: '+2 damage per shot per level.',
     icon: '   /^\\\n==<##>\n   \\v/',
     maxLevel: 16, soft: 10, baseCost: 13, growth: 1.54
   },
   crit: {
     name: 'Critical hit', label: 'Crit chance', group: 'munitions',
-    description: 'Raise the chance to deal critical damage.',
+    description: '+7.5% critical chance per level.',
     icon: ' \\ ! /\n  [*] \n / ! \\',
     maxLevel: 12, soft: 8, baseCost: 17, growth: 1.53
   },
   chain: {
     name: 'Arc chain', label: 'Arc chain', group: 'munitions',
-    description: 'Let shots arc between nearby targets.',
+    description: 'Shots arc to one more nearby target per level.',
     icon: 'o-.    \n  \\.-o \n   \\.-o',
     maxLevel: 7, soft: 5, baseCost: 24, growth: 1.68
   },
   armor: {
     name: 'Armor', label: 'Armor', group: 'chassis',
-    description: 'Reduce damage from every impact on the core.',
+    description: 'Each level blocks 1.5 damage from every core impact.',
     icon: '.====.\n| /\\ |\n \\==/',
     maxLevel: 12, soft: 8, baseCost: 12, growth: 1.49
   },
   regen: {
     name: 'Repair', label: 'Repair', group: 'chassis',
-    description: 'Regenerate core integrity over time.',
+    description: 'Regenerate 0.2 integrity per second per level.',
     icon: '  [+]  \n[+] [+]\n  [+]  ',
     maxLevel: 10, soft: 6, baseCost: 18, growth: 1.57
   },
   bounty: {
     name: 'Bounty', label: 'Bounty', group: 'chassis',
-    description: 'Recover more scrap from destroyed hostiles.',
+    description: '+18% scrap from kills per level.',
     icon: " .---.\n(  $  )\n '---'",
     maxLevel: 8, soft: 5, baseCost: 20, growth: 1.75
   },
   lethality: {
     name: 'Lethality', label: 'Crit power', group: 'munitions',
-    description: 'Critical hits deal 10% more damage per level.',
+    description: 'Critical multiplier +0.1x per level. The base is 2x.',
     icon: ' \\ | /\n-=[X]=-\n / | \\', after: 240, maxLevel: 8, baseCost: 18, growth: 1.5
   },
   incendiary: {
@@ -132,7 +132,7 @@ export const UPGRADES = {
 export const POWERS = {
   reaper: {
     name: 'Reaper die', family: 'Ballistics', rarity: 'uncommon',
-    description: '2% chance a hit destroys a non-boss hostile outright.',
+    description: '2% chance per stack that a hit destroys a non-boss hostile outright.',
     sigil: "  .-.\n (x_x)\n  /|\\", maxStacks: 3
   },
   overkill: {
@@ -147,7 +147,8 @@ export const POWERS = {
   },
   coinflip: {
     name: 'Coin flip', family: 'Ballistics', rarity: 'uncommon',
-    description: 'Each shot deals 50% or 170% damage.',
+    description: 'Half your shots deal 170% damage.',
+    downside: 'The other half deal only 50%.',
     sigil: "  .--.\n ( $? )\n  '--'", maxStacks: 1
   },
   hoard: {
@@ -207,7 +208,7 @@ export const POWERS = {
   },
   overclock: {
     name: 'Overclock', family: 'Ballistics', rarity: 'common',
-    description: 'Increase fire rate by 15%.',
+    description: '+15% fire rate.',
     sigil: '   / / /\n==/=/=/==\n / / /', maxStacks: 3
   },
   fracture: {
@@ -277,7 +278,7 @@ export const POWERS = {
   },
   caliper: {
     name: 'Ratchet sight', family: 'Ballistics', rarity: 'common',
-    description: "Gain 8 percentage points of critical chance.",
+    description: "+8% critical chance.",
     sigil: " o-|-o\n   |\n  [_]", maxStacks: 2
   },
   longshot: {
@@ -337,17 +338,20 @@ export const POWERS = {
   },
   glass: {
     name: 'Glass chamber', family: 'Ballistics', rarity: 'uncommon',
-    description: "Deal 35% more shot damage. Core impacts deal 25% more damage.",
+    description: "Deal 35% more shot damage.",
+    downside: "Core impacts deal 25% more damage.",
     sigil: "  /\\\n <##>\n  \\/", maxStacks: 1
   },
   rail: {
     name: 'Long rail', family: 'Ballistics', rarity: 'uncommon',
-    description: "Gain 30% range. Fire 12% slower.",
+    description: "+30% range.",
+    downside: "Fire 12% slower.",
     sigil: " /======>\n/======>\n    ||", maxStacks: 1
   },
   repeater: {
     name: 'Drum feed', family: 'Ballistics', rarity: 'uncommon',
-    description: "Fire 35% faster. Shots deal 20% less damage.",
+    description: "Fire 35% faster.",
+    downside: "Shots deal 20% less damage.",
     sigil: " .-::-.\n |oooo|\n  ==>>", maxStacks: 1
   },
   redline: {
@@ -357,7 +361,8 @@ export const POWERS = {
   },
   ballast: {
     name: 'Stone heart', family: 'Defense', rarity: 'uncommon',
-    description: "Gain 40 maximum integrity and heal 40. Lose 7 range.",
+    description: "+40 maximum integrity and heal 40.",
+    downside: "-7 range.",
     sigil: "  _  _\n /##V#\\\n \\###/", maxStacks: 1
   },
   tracer: {
@@ -382,12 +387,14 @@ export const POWERS = {
   },
   mesh: {
     name: 'Copper braid', family: 'Ordnance', rarity: 'uncommon',
-    description: "Gain 2 arc jumps. Halve blast radius.",
+    description: "Shots arc to 2 more targets.",
+    downside: "Blast radius is halved.",
     sigil: "o--. .-o\n   X\no--' '-o", maxStacks: 1
   },
   precision: {
     name: 'Loaded dice', family: 'Ballistics', rarity: 'uncommon',
-    description: "Gain 18 critical chance points. Critical hits deal 1.6x damage.",
+    description: "+18% critical chance.",
+    downside: "Critical hits deal 1.6x damage instead of 2x.",
     sigil: " .---.\n |o o|\n |.o.|", maxStacks: 1
   },
   returnfire: {
@@ -432,7 +439,7 @@ export const POWERS = {
   },
   deadeye: {
     name: 'Deadeye', family: 'Ballistics', rarity: 'common',
-    description: 'Gain 6 critical chance points. Critical hits deal 15% more.',
+    description: '+6% critical chance. Critical multiplier +0.15x.',
     sigil: "  .-.\n-(-o-)-\n  '-'", maxStacks: 2
   },
   quickdraw: {
@@ -512,7 +519,7 @@ export const POWERS = {
   },
   brittle: {
     name: 'Brittle frost', family: 'Control', rarity: 'common',
-    description: 'Hits on slowed hostiles gain 15 critical chance points.',
+    description: '+15% critical chance against slowed hostiles.',
     sigil: " *-+-*\n  /*\\\n *-+-*", maxStacks: 1
   },
   anchor: {
@@ -592,7 +599,7 @@ export const SYNERGIES = {
   },
   meltdown: {
     name: 'Meltdown', power: 'kindling', upgrade: 'incendiary', level: 3,
-    description: 'Burns deal another 50% more damage.'
+    description: 'Burn damage +50% more, on top of Kindling.'
   },
   permafrost: {
     name: 'Permafrost', power: 'nova', upgrade: 'chill', level: 3,
@@ -604,7 +611,7 @@ export const SYNERGIES = {
   },
   executioner: {
     name: 'Executioner', power: 'deadeye', upgrade: 'lethality', level: 3,
-    description: 'Critical hits deal another 25% more.'
+    description: 'Critical multiplier +0.25x more.'
   },
   bountyhunter: {
     name: 'Bounty hunter', power: 'warrant', upgrade: 'hunter', level: 3,
